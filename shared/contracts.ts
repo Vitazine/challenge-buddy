@@ -34,10 +34,24 @@ export const createChallengeSchema = z
   })
   .strict();
 
+export const listChallengesSchema = z
+  .object({
+    page: z.coerce.number().int().min(1).max(100000).default(1),
+    pageSize: z.coerce.number().int().min(1).max(50).default(20),
+    archived: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+  })
+  .strict();
+
+export const archiveChallengeSchema = z.object({}).strict();
+
 export type CreateChallengeInput = z.infer<typeof createChallengeSchema>;
 export interface Challenge extends CreateChallengeInput {
   id: string;
   createdAt: string;
+  archivedAt: string | null;
   endDate: string;
   checkIns: string[];
   today: string;

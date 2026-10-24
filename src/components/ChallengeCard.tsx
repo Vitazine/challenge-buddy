@@ -11,13 +11,15 @@ export function ChallengeCard({
 }) {
   const checked = challenge.checkIns.includes(challenge.today);
   const status =
-    challenge.status === "upcoming"
-      ? "Скоро старт"
-      : challenge.status === "finished"
-        ? "Завершен"
-        : checked
-          ? "Сегодня сделано"
-          : "Ждет твоего шага";
+    challenge.archivedAt !== null
+      ? "В архиве"
+      : challenge.status === "upcoming"
+        ? "Скоро старт"
+        : challenge.status === "finished"
+          ? "Завершен"
+          : checked
+            ? "Сегодня сделано"
+            : "Ждет твоего шага";
   return (
     <li>
       <button className="challenge-card" onClick={onOpen}>

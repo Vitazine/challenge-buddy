@@ -5,6 +5,9 @@ import { ChallengeDetail } from "./components/ChallengeDetail";
 import { useChallengeApp } from "./hooks/useChallengeApp";
 export function App() {
   const {
+    archived,
+    showList,
+    archive,
     view,
     setView,
     items,
@@ -29,7 +32,7 @@ export function App() {
       <header className="header">
         <button
           className="brand"
-          onClick={back}
+          onClick={() => showList(false)}
           disabled={pending}
           aria-label="Challenge Buddy — мои челленджи"
         >
@@ -44,9 +47,9 @@ export function App() {
         <span className="edition">ТВОЙ РИТМ</span>
       </header>
       <main ref={main} tabIndex={-1}>
-        {view.type !== "list" && (
+        {(view.type !== "list" || archived) && (
           <button className="back" onClick={back} disabled={pending}>
-            ← Мои челленджи
+            ← {view.type === "detail" && archived ? "Архив" : "Мои челленджи"}
           </button>
         )}
         {session?.mode === "development" && (
@@ -73,6 +76,8 @@ export function App() {
         </div>
         {view.type === "list" && (
           <Dashboard
+            archived={archived}
+            onArchive={() => showList(true)}
             items={items}
             total={total}
             page={page}
@@ -100,6 +105,7 @@ export function App() {
           <ChallengeDetail
             challenge={view.challenge}
             pending={pending}
+            onArchive={() => void archive(view.challenge.id)}
             onToggle={() => {
               const checked = view.challenge.checkIns.includes(
                 view.challenge.today,

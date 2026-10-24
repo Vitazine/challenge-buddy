@@ -256,6 +256,7 @@ main {
   display: flex;
   justify-content: space-between;
   align-items: end;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 24px;
 }

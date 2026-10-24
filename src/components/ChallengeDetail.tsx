@@ -6,10 +6,12 @@ export function ChallengeDetail({
   challenge,
   pending,
   onToggle,
+  onArchive,
 }: {
   challenge: Challenge;
   pending: boolean;
   onToggle: () => void;
+  onArchive: () => void;
 }) {
   const checked = challenge.checkIns.includes(challenge.today);
   const days = Array.from({ length: challenge.duration }, (_, index) =>
@@ -32,22 +34,26 @@ export function ChallengeDetail({
             <div>
               <p className="eyebrow">{formatDate(challenge.today)} · СЕГОДНЯ</p>
               <h2>
-                {challenge.status === "upcoming"
-                  ? "Всё начинается скоро"
-                  : challenge.status === "finished"
-                    ? "Челлендж завершен"
-                    : checked
-                      ? "Еще один шаг сделан!"
-                      : "Один маленький шаг"}
+                {challenge.archivedAt !== null
+                  ? "Челлендж в архиве"
+                  : challenge.status === "upcoming"
+                    ? "Всё начинается скоро"
+                    : challenge.status === "finished"
+                      ? "Челлендж завершен"
+                      : checked
+                        ? "Еще один шаг сделан!"
+                        : "Один маленький шаг"}
               </h2>
               <p>
-                {challenge.status === "upcoming"
-                  ? `Первая отметка будет доступна ${formatDate(challenge.startDate)}.`
-                  : challenge.status === "finished"
-                    ? "Твоя история и прогресс останутся здесь."
-                    : checked
-                      ? "Отметка сохранена. До завтра!"
-                      : "Выполни свое действие и отметь этот день."}
+                {challenge.archivedAt !== null
+                  ? "История и прогресс сохранены. Добавление и отмена отметок недоступны."
+                  : challenge.status === "upcoming"
+                    ? `Первая отметка будет доступна ${formatDate(challenge.startDate)}.`
+                    : challenge.status === "finished"
+                      ? "Твоя история и прогресс останутся здесь."
+                      : checked
+                        ? "Отметка сохранена. До завтра!"
+                        : "Выполни свое действие и отметь этот день."}
               </p>
             </div>
             {challenge.canCheckIn && (
@@ -110,6 +116,21 @@ export function ChallengeDetail({
             Главное — продолжать.
           </p>
           <p className="hint">Часовой пояс: {challenge.timeZone}</p>
+          {challenge.archivedAt === null && (
+            <>
+              <p className="hint" id="archive-hint">
+                В архиве нельзя менять отметки. Восстановление недоступно.
+              </p>
+              <button
+                className="secondary full"
+                onClick={onArchive}
+                disabled={pending}
+                aria-describedby="archive-hint"
+              >
+                {pending ? "Сохраняем…" : "Архивировать челлендж"}
+              </button>
+            </>
+          )}
         </aside>
       </div>
     </section>

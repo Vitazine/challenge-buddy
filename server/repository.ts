@@ -6,6 +6,7 @@ export interface ChallengeRecord extends CreateChallengeInput {
   id: string;
   ownerId: string;
   createdAt: string;
+  archivedAt: string | null;
 }
 
 export class ChallengeRepository {
@@ -26,8 +27,24 @@ export class ChallengeRepository {
         challengeId TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
         date TEXT NOT NULL, PRIMARY KEY(challengeId, date)
       );
-      PRAGMA user_version = 1;
     `);
+    const version = Number(
+      this.db.prepare("PRAGMA user_version").get()!.user_version,
+    );
+    if (version < 2) {
+      this.db.exec("BEGIN IMMEDIATE");
+      try {
+        this.db.exec(`
+          ALTER TABLE challenges ADD COLUMN archivedAt TEXT DEFAULT NULL;
+          PRAGMA user_version = 2;
+          COMMIT;
+        `);
+      } catch (error) {
+        this.db.exec("ROLLBACK");
+        this.db.close();
+        throw error;
+      }
+    }
   }
   create(
     ownerId: string,
@@ -39,9 +56,12 @@ export class ChallengeRepository {
       id: randomUUID(),
       ownerId,
       createdAt: now.toISOString(),
+      archivedAt: null,
     };
     this.db
-      .prepare("INSERT INTO challenges VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .prepare(
+        "INSERT INTO challenges (id, ownerId, title, startDate, duration, timeZone, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
       .run(
         record.id,
         ownerId,
@@ -53,24 +73,43 @@ export class ChallengeRepository {
       );
     return record;
   }
-  list(ownerId: string, limit: number, offset: number): ChallengeRecord[] {
+  list(
+    ownerId: string,
+    limit: number,
+    offset: number,
+    archived = false,
+  ): ChallengeRecord[] {
     return this.db
       .prepare(
-        "SELECT * FROM challenges WHERE ownerId = ? ORDER BY createdAt DESC, id DESC LIMIT ? OFFSET ?",
+        "SELECT * FROM challenges WHERE ownerId = ? AND (archivedAt IS NOT NULL) = ? ORDER BY createdAt DESC, id DESC LIMIT ? OFFSET ?",
       )
-      .all(ownerId, limit, offset) as unknown as ChallengeRecord[];
+      .all(
+        ownerId,
+        Number(archived),
+        limit,
+        offset,
+      ) as unknown as ChallengeRecord[];
   }
-  count(ownerId: string): number {
+  count(ownerId: string, archived = false): number {
     return Number(
       this.db
-        .prepare("SELECT COUNT(*) AS count FROM challenges WHERE ownerId = ?")
-        .get(ownerId)!.count,
+        .prepare(
+          "SELECT COUNT(*) AS count FROM challenges WHERE ownerId = ? AND (archivedAt IS NOT NULL) = ?",
+        )
+        .get(ownerId, Number(archived))!.count,
     );
   }
   find(id: string, ownerId: string): ChallengeRecord | undefined {
     return this.db
       .prepare("SELECT * FROM challenges WHERE id = ? AND ownerId = ?")
       .get(id, ownerId) as unknown as ChallengeRecord | undefined;
+  }
+  archive(id: string, ownerId: string, now: Date): void {
+    this.db
+      .prepare(
+        "UPDATE challenges SET archivedAt = ? WHERE id = ? AND ownerId = ? AND archivedAt IS NULL",
+      )
+      .run(now.toISOString(), id, ownerId);
   }
   dates(id: string): string[] {
     return this.db

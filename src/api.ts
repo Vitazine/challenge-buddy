@@ -29,13 +29,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 export const api = {
   session: () => request<Session>("/session"),
-  list: (page = 1) => request<ChallengeList>(`/challenges?page=${page}`),
+  list: (page = 1, archived = false) =>
+    request<ChallengeList>(`/challenges?page=${page}&archived=${archived}`),
   get: (id: string) => request<Challenge>(`/challenges/${id}`),
   create: (input: CreateChallengeInput) =>
     request<Challenge>("/challenges", {
       method: "POST",
       body: JSON.stringify(input),
     }),
+  archive: (id: string) =>
+    request<Challenge>(`/challenges/${id}/archive`, { method: "PUT" }),
   checkIn: (id: string, checked: boolean) =>
     request<Challenge>(`/challenges/${id}/check-ins/today`, {
       method: checked ? "PUT" : "DELETE",

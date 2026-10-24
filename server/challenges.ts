@@ -20,7 +20,10 @@ export class ChallengeService {
       today,
       checkIns,
       progress: Math.round((checkIns.length / record.duration) * 100),
-      canCheckIn: today >= record.startDate && today <= endDate,
+      canCheckIn:
+        record.archivedAt === null &&
+        today >= record.startDate &&
+        today <= endDate,
       status:
         today < record.startDate
           ? "upcoming"
@@ -29,14 +32,14 @@ export class ChallengeService {
             : "active",
     };
   }
-  list(ownerId: string, page: number, pageSize: number) {
+  list(ownerId: string, page: number, pageSize: number, archived = false) {
     return {
       items: this.repository
-        .list(ownerId, pageSize, (page - 1) * pageSize)
+        .list(ownerId, pageSize, (page - 1) * pageSize, archived)
         .map((row) => this.present(row)),
       page,
       pageSize,
-      total: this.repository.count(ownerId),
+      total: this.repository.count(ownerId, archived),
     };
   }
   create(ownerId: string, input: CreateChallengeInput): Challenge {
@@ -47,8 +50,19 @@ export class ChallengeService {
     if (!record) throw new AppError(404, "NOT_FOUND", "Челлендж не найден.");
     return this.present(record);
   }
+  archive(ownerId: string, id: string): Challenge {
+    this.get(ownerId, id);
+    this.repository.archive(id, ownerId, this.clock());
+    return this.get(ownerId, id);
+  }
   checkIn(ownerId: string, id: string, marked: boolean): Challenge {
     const challenge = this.get(ownerId, id);
+    if (challenge.archivedAt !== null)
+      throw new AppError(
+        409,
+        "ARCHIVED",
+        "В архиве нельзя добавлять и отменять отметки.",
+      );
     if (!challenge.canCheckIn)
       throw new AppError(
         409,
