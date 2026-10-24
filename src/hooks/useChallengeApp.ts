@@ -12,6 +12,7 @@ type View =
   | { type: "detail"; challenge: Challenge };
 export function useChallengeApp() {
   const [view, setView] = useState<View>({ type: "list" });
+  const [archived, setArchived] = useState(false);
   const [items, setItems] = useState<Challenge[]>([]);
   const [session, setSession] = useState<Session>();
   const [page, setPage] = useState(1);
@@ -21,37 +22,52 @@ export function useChallengeApp() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const mutationLock = useRef(false);
+  // Navigation and mutations invalidate every earlier list/detail response.
+  const requestVersion = useRef(0);
   const main = useRef<HTMLElement>(null);
-  const load = useCallback(
-    () =>
-      Promise.all([api.session(), api.list(page)])
-        .then(([currentSession, list]) => {
-          setError("");
-          setSession(currentSession);
-          setItems(list.items);
-          setTotal(list.total);
-        })
-        .catch((cause: unknown) => {
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "Не удалось загрузить челленджи.",
-          );
-        })
-        .finally(() => setLoading(false)),
-    [page],
-  );
+  const load = useCallback(() => {
+    const version = ++requestVersion.current;
+    return Promise.all([api.session(), api.list(page, archived)])
+      .then(([currentSession, list]) => {
+        if (version !== requestVersion.current) return;
+        const lastPage = Math.max(1, Math.ceil(list.total / list.pageSize));
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+        setError("");
+        setSession(currentSession);
+        setItems(list.items);
+        setTotal(list.total);
+        setLoading(false);
+      })
+      .catch((cause: unknown) => {
+        if (version !== requestVersion.current) return;
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "Не удалось загрузить челленджи.",
+        );
+        setLoading(false);
+      });
+  }, [page, archived]);
   useEffect(() => {
+    const versionRef = requestVersion;
     void load();
+    return () => {
+      versionRef.current++;
+    };
   }, [load]);
   useEffect(() => {
     main.current?.focus({ preventScroll: true });
     window.scrollTo({ top: 0 });
-  }, [view.type]);
+  }, [view.type, archived]);
   const back = useCallback(() => {
+    if (mutationLock.current) return;
     setView({ type: "list" });
     setError("");
     setNotice("");
+    setLoading(true);
     void load();
   }, [load]);
   useEffect(() => {
@@ -62,21 +78,40 @@ export function useChallengeApp() {
     button.onClick(back);
     return () => button.offClick(back);
   }, [view.type, back]);
-  // Refresh server-derived dates when the app is resumed and around midnight.
   const selectedId = view.type === "detail" ? view.challenge.id : undefined;
   useEffect(() => {
+    let canceled = false;
     const refresh = async () => {
-      if (document.hidden || mutationLock.current) return;
+      if (document.hidden || mutationLock.current || loading) return;
+      const version = requestVersion.current;
       try {
         if (selectedId) {
           const challenge = await api.get(selectedId);
+          if (
+            canceled ||
+            version !== requestVersion.current ||
+            mutationLock.current
+          )
+            return;
           setView((current) =>
             current.type === "detail" && current.challenge.id === selectedId
               ? { type: "detail", challenge }
               : current,
           );
         } else if (view.type === "list") {
-          const list = await api.list(page);
+          const list = await api.list(page, archived);
+          if (
+            canceled ||
+            version !== requestVersion.current ||
+            mutationLock.current
+          )
+            return;
+          const lastPage = Math.max(1, Math.ceil(list.total / list.pageSize));
+          if (page > lastPage) {
+            setLoading(true);
+            setPage(lastPage);
+            return;
+          }
           setItems(list.items);
           setTotal(list.total);
         }
@@ -88,13 +123,40 @@ export function useChallengeApp() {
     const onVisible = () => void refresh();
     document.addEventListener("visibilitychange", onVisible);
     return () => {
+      canceled = true;
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [selectedId, view.type, page]);
+  }, [selectedId, view.type, page, archived, loading]);
+  function navigate(next: View) {
+    if (mutationLock.current) return;
+    requestVersion.current++;
+    setView(next);
+    setError("");
+    setNotice("");
+  }
+  function switchArchive(next: boolean) {
+    if (mutationLock.current || next === archived) return;
+    requestVersion.current++;
+    setArchived(next);
+    setPage(1);
+    setItems([]);
+    setTotal(0);
+    setLoading(true);
+    setError("");
+    setNotice("");
+    setView({ type: "list" });
+  }
+  function changePage(next: number) {
+    if (mutationLock.current || next === page) return;
+    requestVersion.current++;
+    setLoading(true);
+    setPage(next);
+  }
   async function mutate(operation: () => Promise<Challenge>, message: string) {
     if (mutationLock.current) return;
     mutationLock.current = true;
+    requestVersion.current++;
     setPending(true);
     setError("");
     setNotice("");
@@ -117,18 +179,19 @@ export function useChallengeApp() {
     mutate(() => api.create(input), "Челлендж создан. Твой первый шаг вперед!");
   return {
     view,
-    setView,
+    navigate,
+    archived,
+    switchArchive,
     items,
     session,
     page,
-    setPage,
+    changePage,
     total,
     loading,
     setLoading,
     pending,
     error,
     notice,
-    setNotice,
     main,
     load,
     back,

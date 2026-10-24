@@ -6,10 +6,12 @@ export function ChallengeDetail({
   challenge,
   pending,
   onToggle,
+  onArchive,
 }: {
   challenge: Challenge;
   pending: boolean;
   onToggle: () => void;
+  onArchive: () => void;
 }) {
   const checked = challenge.checkIns.includes(challenge.today);
   const days = Array.from({ length: challenge.duration }, (_, index) =>
@@ -23,6 +25,22 @@ export function ChallengeDetail({
         {formatDate(challenge.startDate)} — {formatDate(challenge.endDate)} ·{" "}
         {challenge.duration} дней
       </p>
+      {challenge.archivedAt ? (
+        <p className="notice">
+          В архиве. История и прогресс сохранены, изменение отметок и
+          восстановление недоступны.
+        </p>
+      ) : (
+        <div className="archive-action">
+          <button className="secondary" disabled={pending} onClick={onArchive}>
+            {pending ? "Сохраняем…" : "Архивировать челлендж"}
+          </button>
+          <p className="hint">
+            Челлендж исчезнет из обычного списка. История сохранится в архиве.
+            Восстановление недоступно.
+          </p>
+        </div>
+      )}
       <div className="detail-grid">
         <div className="detail-main">
           <section className={`today-card ${checked ? "checked" : ""}`}>
@@ -32,22 +50,26 @@ export function ChallengeDetail({
             <div>
               <p className="eyebrow">{formatDate(challenge.today)} · СЕГОДНЯ</p>
               <h2>
-                {challenge.status === "upcoming"
-                  ? "Всё начинается скоро"
-                  : challenge.status === "finished"
-                    ? "Челлендж завершен"
-                    : checked
-                      ? "Еще один шаг сделан!"
-                      : "Один маленький шаг"}
+                {challenge.archivedAt
+                  ? "Челлендж в архиве"
+                  : challenge.status === "upcoming"
+                    ? "Всё начинается скоро"
+                    : challenge.status === "finished"
+                      ? "Челлендж завершен"
+                      : checked
+                        ? "Еще один шаг сделан!"
+                        : "Один маленький шаг"}
               </h2>
               <p>
-                {challenge.status === "upcoming"
-                  ? `Первая отметка будет доступна ${formatDate(challenge.startDate)}.`
-                  : challenge.status === "finished"
-                    ? "Твоя история и прогресс останутся здесь."
-                    : checked
-                      ? "Отметка сохранена. До завтра!"
-                      : "Выполни свое действие и отметь этот день."}
+                {challenge.archivedAt
+                  ? "Твои отметки доступны только для просмотра."
+                  : challenge.status === "upcoming"
+                    ? `Первая отметка будет доступна ${formatDate(challenge.startDate)}.`
+                    : challenge.status === "finished"
+                      ? "Твоя история и прогресс останутся здесь."
+                      : checked
+                        ? "Отметка сохранена. До завтра!"
+                        : "Выполни свое действие и отметь этот день."}
               </p>
             </div>
             {challenge.canCheckIn && (

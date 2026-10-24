@@ -3,7 +3,10 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import staticFiles from "@fastify/static";
 import { z, ZodError } from "zod";
-import { createChallengeSchema } from "../shared/contracts";
+import {
+  createChallengeSchema,
+  listChallengesSchema,
+} from "../shared/contracts";
 import { validateInitData } from "./auth";
 import { AppError } from "./errors";
 import { ChallengeRepository } from "./repository";
@@ -49,14 +52,12 @@ export async function buildApp(options: AppOptions) {
   await app.register(rateLimit, { max: 120, timeWindow: "1 minute" });
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof ZodError)
-      return reply
-        .code(422)
-        .send({
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Проверьте название, дату, длительность и часовой пояс.",
-          },
-        });
+      return reply.code(422).send({
+        error: {
+          code: "VALIDATION_ERROR",
+          message: "Проверьте название, дату, длительность и часовой пояс.",
+        },
+      });
     if (error instanceof AppError)
       return reply
         .code(error.statusCode)
@@ -68,17 +69,15 @@ export async function buildApp(options: AppOptions) {
       error.statusCode < 500
         ? error.statusCode
         : 500;
-    return reply
-      .code(status)
-      .send({
-        error: {
-          code: status === 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR",
-          message:
-            status === 429
-              ? "Слишком много запросов. Попробуйте через минуту."
-              : "Не удалось обработать запрос.",
-        },
-      });
+    return reply.code(status).send({
+      error: {
+        code: status === 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR",
+        message:
+          status === 429
+            ? "Слишком много запросов. Попробуйте через минуту."
+            : "Не удалось обработать запрос.",
+      },
+    });
   });
   app.get("/api/health", async () => ({ status: "ok" }));
   app.get("/healthz", async () => ({ status: "ok" }));
@@ -133,13 +132,13 @@ export async function buildApp(options: AppOptions) {
         mode: options.devAuth ? "development" : "telegram",
       }));
       api.get("/challenges", async (request) => {
-        const query = z
-          .object({
-            page: z.coerce.number().int().min(1).max(100000).default(1),
-            pageSize: z.coerce.number().int().min(1).max(50).default(20),
-          })
-          .parse(request.query);
-        return service.list(owners.get(request)!, query.page, query.pageSize);
+        const query = listChallengesSchema.parse(request.query);
+        return service.list(
+          owners.get(request)!,
+          query.page,
+          query.pageSize,
+          query.archived,
+        );
       });
       api.post("/challenges", async (request, reply) => {
         const challenge = service.create(
@@ -153,6 +152,10 @@ export async function buildApp(options: AppOptions) {
       api.get("/challenges/:id", async (request) =>
         service.get(owners.get(request)!, idOf(request.params)),
       );
+      api.put("/challenges/:id/archive", async (request) => {
+        z.undefined().parse(request.body);
+        return service.archive(owners.get(request)!, idOf(request.params));
+      });
       api.put("/challenges/:id/check-ins/today", async (request) =>
         service.checkIn(owners.get(request)!, idOf(request.params), true),
       );

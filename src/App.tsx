@@ -6,18 +6,19 @@ import { useChallengeApp } from "./hooks/useChallengeApp";
 export function App() {
   const {
     view,
-    setView,
+    navigate,
+    archived,
+    switchArchive,
     items,
     session,
     page,
-    setPage,
+    changePage,
     total,
     loading,
     setLoading,
     pending,
     error,
     notice,
-    setNotice,
     main,
     load,
     back,
@@ -46,7 +47,7 @@ export function App() {
       <main ref={main} tabIndex={-1}>
         {view.type !== "list" && (
           <button className="back" onClick={back} disabled={pending}>
-            ← Мои челленджи
+            ← {archived ? "Архив" : "Мои челленджи"}
           </button>
         )}
         {session?.mode === "development" && (
@@ -73,6 +74,8 @@ export function App() {
         </div>
         {view.type === "list" && (
           <Dashboard
+            archived={archived}
+            onSwitchArchive={() => switchArchive(!archived)}
             items={items}
             total={total}
             page={page}
@@ -80,17 +83,12 @@ export function App() {
             error={error}
             ready={Boolean(session)}
             onCreate={() => {
-              setView({ type: "create" });
-              setNotice("");
+              navigate({ type: "create" });
             }}
             onOpen={(challenge) => {
-              setView({ type: "detail", challenge });
-              setNotice("");
+              navigate({ type: "detail", challenge });
             }}
-            onPage={(next) => {
-              setLoading(true);
-              setPage(next);
-            }}
+            onPage={changePage}
           />
         )}
         {view.type === "create" && (
@@ -100,6 +98,12 @@ export function App() {
           <ChallengeDetail
             challenge={view.challenge}
             pending={pending}
+            onArchive={() => {
+              void mutate(
+                () => api.archive(view.challenge.id),
+                "Челлендж в архиве. История и прогресс сохранены.",
+              );
+            }}
             onToggle={() => {
               const checked = view.challenge.checkIns.includes(
                 view.challenge.today,

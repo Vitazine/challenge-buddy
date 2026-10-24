@@ -10,8 +10,9 @@ export function ChallengeCard({
   onOpen: () => void;
 }) {
   const checked = challenge.checkIns.includes(challenge.today);
-  const status =
-    challenge.status === "upcoming"
+  const status = challenge.archivedAt
+    ? "В архиве"
+    : challenge.status === "upcoming"
       ? "Скоро старт"
       : challenge.status === "finished"
         ? "Завершен"

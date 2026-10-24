@@ -1,6 +1,8 @@
 import type { Challenge } from "../../shared/contracts";
 import { ChallengeCard } from "./ChallengeCard";
 interface DashboardProps {
+  archived: boolean;
+  onSwitchArchive: () => void;
   items: Challenge[];
   total: number;
   page: number;
@@ -12,6 +14,8 @@ interface DashboardProps {
   onPage: (page: number) => void;
 }
 export function Dashboard({
+  archived,
+  onSwitchArchive,
   items,
   total,
   page,
@@ -27,51 +31,79 @@ export function Dashboard({
   ).length;
   return (
     <>
-      <section className="welcome">
-        <div>
-          <p className="eyebrow">ПРОГРЕСС НАЧИНАЕТСЯ С ТЕБЯ</p>
-          <h1>
-            Большие перемены.
-            <br />
-            <span>Маленькими шагами.</span>
-          </h1>
+      <nav className="list-switch" aria-label="Представление челленджей">
+        <button
+          className="secondary"
+          aria-pressed={!archived}
+          onClick={() => archived && onSwitchArchive()}
+        >
+          Мои челленджи
+        </button>
+        <button
+          className="secondary"
+          aria-pressed={archived}
+          onClick={() => !archived && onSwitchArchive()}
+        >
+          Архив
+        </button>
+      </nav>
+      {archived ? (
+        <section className="archive-intro">
+          <p className="eyebrow">СОХРАНЁННЫЕ ШАГИ</p>
+          <h1>Архив челленджей</h1>
           <p className="intro">
-            Выбери свой челлендж. Приходи каждый день.
-            <br />
-            Замечай, как далеко ты уже прошел.
+            История и прогресс сохранены. В архиве нельзя добавлять или отменять
+            отметки. Восстановление недоступно.
           </p>
-          <button className="primary" onClick={onCreate} disabled={!ready}>
-            + Новый челлендж
-          </button>
-        </div>
-        <div className="rhythm-art" aria-hidden="true">
-          <div className="art-caption">ДЕНЬ ЗА ДНЕМ</div>
-          <div className="art-path">
-            <i>✓</i>
-            <i>✓</i>
-            <i>↗</i>
-            <i>4</i>
-            <i>5</i>
-            <i>6</i>
-            <i>7</i>
+        </section>
+      ) : (
+        <section className="welcome">
+          <div>
+            <p className="eyebrow">ПРОГРЕСС НАЧИНАЕТСЯ С ТЕБЯ</p>
+            <h1>
+              Большие перемены.
+              <br />
+              <span>Маленькими шагами.</span>
+            </h1>
+            <p className="intro">
+              Выбери свой челлендж. Приходи каждый день.
+              <br />
+              Замечай, как далеко ты уже прошел.
+            </p>
+            <button className="primary" onClick={onCreate} disabled={!ready}>
+              + Новый челлендж
+            </button>
           </div>
-          <p>
-            Не идеально.
-            <br />
-            <strong>Зато вперед.</strong>
-          </p>
-          <span className="art-spark">✳</span>
-        </div>
-      </section>
+          <div className="rhythm-art" aria-hidden="true">
+            <div className="art-caption">ДЕНЬ ЗА ДНЕМ</div>
+            <div className="art-path">
+              <i>✓</i>
+              <i>✓</i>
+              <i>↗</i>
+              <i>4</i>
+              <i>5</i>
+              <i>6</i>
+              <i>7</i>
+            </div>
+            <p>
+              Не идеально.
+              <br />
+              <strong>Зато вперед.</strong>
+            </p>
+            <span className="art-spark">✳</span>
+          </div>
+        </section>
+      )}
       <section className="list-section">
         <div className="section-heading">
           <div>
             <p className="eyebrow">ТО, ЧТО ВАЖНО ТЕБЕ</p>
             <h2>
-              Мои челленджи <span className="count">{total}</span>
+              {archived ? "В архиве" : "Мои челленджи"}{" "}
+              <span className="count">{total}</span>
             </h2>
           </div>
-          {items.length > 0 && (
+          {!archived && items.length > 0 && (
             <span className="muted">
               Сегодня отмечено: {todayCount}
               {total > 20 ? " на странице" : ""}
@@ -101,15 +133,21 @@ export function Dashboard({
                 ↗
               </span>
               <div>
-                <h3>Здесь начнется твоя история</h3>
+                <h3>
+                  {archived ? "Архив пока пуст" : "Здесь начнется твоя история"}
+                </h3>
                 <p>
-                  Семь дней чтения, прогулок или нового навыка.
-                  <br />
-                  Начни с того, что давно хотелось попробовать.
+                  {archived
+                    ? "Архивированные челленджи появятся здесь с историей и прогрессом."
+                    : "Семь дней чтения, прогулок или нового навыка. Начни с того, что давно хотелось попробовать."}
                 </p>
               </div>
-              <button className="text-button" onClick={onCreate}>
-                Создать первый челлендж →
+              <button
+                className="text-button"
+                disabled={!ready}
+                onClick={archived ? onSwitchArchive : onCreate}
+              >
+                {archived ? "К моим челленджам →" : "Создать первый челлендж →"}
               </button>
             </div>
           )

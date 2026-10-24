@@ -837,3 +837,25 @@ input {
     scroll-behavior: auto !important;
   }
 }
+
+.list-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.list-switch [aria-pressed="true"] {
+  background: var(--green);
+  color: var(--lime);
+}
+.archive-intro {
+  max-width: 760px;
+  margin-bottom: 32px;
+}
+.archive-action {
+  margin: 24px 0;
+}
+.archive-action .hint {
+  max-width: 620px;
+  margin-bottom: 0;
+}
