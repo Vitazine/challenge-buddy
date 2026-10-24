@@ -1,0 +1,66 @@
+{
+  "day": 1,
+  "date": "2026-10-24",
+  "timezone": "Asia/Manila",
+  "original_local_baseline": "0862281ac22f0ce6d378e5f8d6b1423f2944e34a",
+  "public_experiment_baseline": "a0e36e85c03f439cf59e8c6e568f1b4306d2a3ab",
+  "public_repository": "https://github.com/Vitazine/challenge-buddy",
+  "model": "inherited parent model; no override",
+  "reasoning": "inherited parent reasoning; no override",
+  "fresh_contexts": true,
+  "global_instructions": "rules/global-AGENTS.md; explicitly loaded in each fresh agent",
+  "skills": [
+    "api-and-interface-design",
+    "security-and-hardening",
+    "frontend-ui-engineering"
+  ],
+  "prompt_sha256": "3e220f1e99caf03c6f701f039b556a2696cc06002cfc39ecae61c1b43fc6d788",
+  "runner_instructions_sha256": "c2c69640b24968322168bc6f9ecc8860a02db2ff675cb59228fed7f24a216e10",
+  "generation_1_workspace": "/private/tmp/advent-day01/generation-1",
+  "generation_2_workspace": "/private/tmp/advent-day01/generation-2",
+  "publication_note": "Original private operations material retained only locally; not part of public Git history. Code baseline unchanged by publication cleanup.",
+  "runner_path_placeholders": [
+    "workspace",
+    "run"
+  ],
+  "public_product_tree": "60f4475e1a100334ce97bce1f8bb9073e057c34e",
+  "initial_copy_tree_both_runs": "d8f67e53daa2b0739efe69e7138aca33e8b3a913",
+  "copy_tree_difference": "Both isolated copy commits additionally contain the same local node_modules symlink to the installed dependencies. Product files match public baseline byte for byte. The symlink is excluded from all published snapshots and branches.",
+  "rules_v1_sha256": "5bf964728ea790b89027f22be17ef71990fa4056e1a0c07746ef19f45f2be903",
+  "rules_v2_sha256": "ab06ecc86bdf1c881d6afcf6e040637dc0f1a2be4fe744f734714a2247d66a30",
+  "exploratory_check_note": "Future-schema diagnostic introduced after generation 1 and before rules v2; separate from predeclared acceptance criteria.",
+  "generation_1_commit": "c107d9185b72d1fd5326c17342737dc3fb9e77f7",
+  "generation_1_branch": "codex/day-01-generation-1",
+  "generation_2_commit": "2e31890a47368624c74fcc9ece11cbc2e89a7e1b",
+  "generation_2_branch": "codex/day-01-generation-2",
+  "main_post_comparison_fix": "Clear loading when navigate invalidates a list request; two original generations remain unchanged.",
+  "public_archive_scope": "Allowlisted runnable application files and Day 1 evidence only; complete initial archives retained locally under ignored data/local-publication-backup/day-01-full-archives.",
+  "generator_contexts": [
+    "/root/generation_1",
+    "/root/generation_2"
+  ],
+  "independent_review_contexts": [
+    "/root/review_generation_1",
+    "/root/review_generation_2"
+  ],
+  "actual_generator_browsers": {
+    "generation_1": "IAB (author report)",
+    "generation_2": "Chrome (author report)"
+  },
+  "parent_comparison_browser": "Chrome; synthetic fixture; 1024x900",
+  "post_comparison_hook_checks_passed": 4,
+  "final_project_tests": {
+    "passed": 15,
+    "failed": 0
+  },
+  "generation_timestamps_utc": {
+    "generation_1": {
+      "start": "2026-10-24 04:26:40 UTC",
+      "end": "2026-10-24 04:35:10 UTC"
+    },
+    "generation_2": {
+      "start": "2026-10-24 04:39:34 UTC",
+      "end": "2026-10-24 04:47:02 UTC"
+    }
+  }
+}

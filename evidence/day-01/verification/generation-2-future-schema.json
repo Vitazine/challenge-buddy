@@ -1,0 +1,15 @@
+{
+  "category": "exploratory; added after generation 1",
+  "startup": "refused",
+  "schemaUnchanged": true,
+  "before": [
+    "future_sentinel"
+  ],
+  "after": [
+    "future_sentinel"
+  ],
+  "version": 99,
+  "sentinel": "synthetic",
+  "message": "Неподдерживаемая версия схемы SQLite: 99; поддерживается до 2.",
+  "desiredOutcome": "refuse unsupported future version before modifying its schema"
+}

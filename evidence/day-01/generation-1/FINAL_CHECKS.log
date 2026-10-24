@@ -1,0 +1,71 @@
+Command: ./scripts/pnpm.sh typecheck
+
+$ tsc --noEmit
+
+Exit code: 0
+
+Command: ./scripts/pnpm.sh lint
+
+$ eslint .
+
+Exit code: 0
+
+Command: node --import tsx --test tests/api.test.ts tests/archive.test.ts tests/auth.test.ts tests/domain.test.ts
+
+✔ API: create → mark → reload → undo; other users cannot read or change data (89.49025ms)
+✔ API rejects missing credentials, bad data and oversized payloads (3.902833ms)
+✔ development identity fails closed in production and for cross-origin requests (2.184959ms)
+✔ archive enforces ownership, preserves history, is idempotent and blocks both mark operations (13.020542ms)
+✔ upcoming and finished challenges can be archived with their calendar status preserved (0.602ms)
+✔ version 1 migration preserves existing records and marks; archived data survives reopening (3.932042ms)
+✔ API archive: authenticated owner only, isolated paginated archive, preserved read-only detail (67.475084ms)
+✔ accepts signed Telegram identity (1.22375ms)
+✔ rejects tampering, bad token, malformed hash and duplicate fields (0.85725ms)
+✔ rejects expired, future and invalid identity (0.928875ms)
+✔ calendar arithmetic and time zones cross boundaries without DST drift (12.18ms)
+✔ input rejects impossible dates, blank titles, fractional durations and unknown fields (1.756292ms)
+✔ last day is inclusive, marks are idempotent, owner is enforced, data survives reopening (4.6265ms)
+✔ future challenge cannot be checked in (0.45875ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 291.724625
+
+Exit code: 0
+
+Command: ./scripts/pnpm.sh build
+
+$ tsc --noEmit && vite build
+vite v7.3.7 building client environment for production...
+transforming...
+../../../../Users/VibeCoder/Documents/Advent Challenge/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js (74:0): A comment
+
+"/** Anchors a pattern source. The interpolation lives here rather than at the call site because
+ * esbuild will not drop a `@__PURE__` call whose own argument interpolates a variable, but it
+ * will drop `anchor(dateSource)`. Keeping it inline pinned `date` into every bundle. */"
+
+in "../../../../Users/VibeCoder/Documents/Advent Challenge/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+../../../../Users/VibeCoder/Documents/Advent Challenge/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js (400:0): A comment
+
+"// Wrapped in a `@__PURE__` IIFE: esbuild never tree-shakes a top-level initializer that contains a member access on `Number`, so the bare object literal survived into every bundle."
+
+in "../../../../Users/VibeCoder/Documents/Advent Challenge/node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+✓ 134 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.86 kB │ gzip:   0.51 kB
+dist/assets/index-ChBsv6Sf.css   11.03 kB │ gzip:   3.08 kB
+dist/assets/index-M4D7HqaW.js   326.71 kB │ gzip: 100.94 kB
+✓ built in 582ms
+
+Exit code: 0
+
+Command: git diff --check
+
+
+Exit code: 0
+

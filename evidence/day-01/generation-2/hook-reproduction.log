@@ -1,0 +1,4 @@
+PASS: delayed background detail response before archive does not replace mutation result
+PASS: archive switch resets page; detail Back keeps archive; returning to ordinary list switches filter
+PASS: empty final page reloads valid previous page
+REPRODUCED: stale loading blocks detail refresh

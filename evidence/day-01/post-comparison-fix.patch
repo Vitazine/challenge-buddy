@@ -1,0 +1,12 @@
+diff --git a/src/hooks/useChallengeApp.ts b/src/hooks/useChallengeApp.ts
+--- a/src/hooks/useChallengeApp.ts
++++ b/src/hooks/useChallengeApp.ts
+@@ -131,6 +131,8 @@
+   function navigate(next: View) {
+     if (mutationLock.current) return;
+     requestVersion.current++;
++    // The invalidated list request no longer owns a loading state on this screen.
++    setLoading(false);
+     setView(next);
+     setError("");
+     setNotice("");

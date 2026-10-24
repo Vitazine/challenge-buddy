@@ -1,0 +1,51 @@
+$ pnpm typecheck && pnpm lint && pnpm test && pnpm build
+$ tsc --noEmit
+$ eslint .
+$ tsx --test tests/*.test.ts
+✔ API: create → mark → reload → undo; other users cannot read or change data (80.949417ms)
+✔ API rejects missing credentials, bad data and oversized payloads (4.319416ms)
+✔ development identity fails closed in production and for cross-origin requests (2.459209ms)
+✔ archive API: ownership, retry, history, both mark methods and list isolation (86.83825ms)
+✔ archive pagination filters items and total identically; statuses stay calendar based (4.476042ms)
+✔ new file becomes v2; archived history survives repeated v2 reopen (3.41275ms)
+✔ v1 migration preserves records, marks and existing indexes (3.238667ms)
+✔ unsupported future schema is rejected without DDL, version or data changes (1.350125ms)
+✔ accepts signed Telegram identity (1.824541ms)
+✔ rejects tampering, bad token, malformed hash and duplicate fields (0.420792ms)
+✔ rejects expired, future and invalid identity (0.455084ms)
+✔ calendar arithmetic and time zones cross boundaries without DST drift (10.336291ms)
+✔ input rejects impossible dates, blank titles, fractional durations and unknown fields (1.854ms)
+✔ last day is inclusive, marks are idempotent, owner is enforced, data survives reopening (3.524458ms)
+✔ future challenge cannot be checked in (0.321416ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 341.913459
+$ tsc --noEmit && vite build
+vite v7.3.7 building client environment for production...
+transforming...
+node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js (74:0): A comment
+
+"/** Anchors a pattern source. The interpolation lives here rather than at the call site because
+ * esbuild will not drop a `@__PURE__` call whose own argument interpolates a variable, but it
+ * will drop `anchor(dateSource)`. Keeping it inline pinned `date` into every bundle. */"
+
+in "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/regexes.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js (400:0): A comment
+
+"// Wrapped in a `@__PURE__` IIFE: esbuild never tree-shakes a top-level initializer that contains a member access on `Number`, so the bare object literal survived into every bundle."
+
+in "node_modules/.pnpm/zod@4.6.7/node_modules/zod/v4/core/util.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+✓ 134 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.86 kB │ gzip:   0.51 kB
+dist/assets/index-qm4ZnKo3.css   11.29 kB │ gzip:   3.14 kB
+dist/assets/index-Dt5rS5wR.js   327.38 kB │ gzip: 101.10 kB
+✓ built in 508ms
+
+Exit code: 0

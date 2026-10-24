@@ -1,0 +1,6 @@
+{
+  "archiveMethod": "PUT",
+  "archivePath": "/api/challenges/:id/archive",
+  "archiveQuery": "archived=true",
+  "invalidArchiveQuery": "archived=invalid"
+}

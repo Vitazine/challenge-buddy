@@ -1,0 +1,26 @@
+$ pnpm typecheck && pnpm lint && pnpm test && pnpm build
+$ tsc --noEmit
+$ eslint .
+$ tsx --test tests/*.test.ts
+node:net:2145
+      const error = new UVExceptionWithHostPort(rval, 'listen', address, port);
+                    ^
+
+Error: listen EPERM: operation not permitted /var/folders/xm/vg2yp9bx47xcsrycb6xs1tk80000gp/T/tsx-502/8700.pipe
+    at Server.setupListenHandle [as _listen2] (node:net:2145:21)
+    at listenInCluster (node:net:2224:12)
+    at Server.listen (node:net:2361:5)
+    at file:///Users/VibeCoder/Documents/Advent%20Challenge/node_modules/.pnpm/tsx@4.23.15/node_modules/tsx/dist/cli.mjs:53:32174
+    at new Promise (<anonymous>)
+    at createIpcServer (file:///Users/VibeCoder/Documents/Advent%20Challenge/node_modules/.pnpm/tsx@4.23.15/node_modules/tsx/dist/cli.mjs:53:32152)
+    at async file:///Users/VibeCoder/Documents/Advent%20Challenge/node_modules/.pnpm/tsx@4.23.15/node_modules/tsx/dist/cli.mjs:55:542 {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '/var/folders/xm/vg2yp9bx47xcsrycb6xs1tk80000gp/T/tsx-502/8700.pipe',
+  port: -1
+}
+
+Node.js v24.19.0
+[ELIFECYCLE] Test failed. See above for more details.
+[ELIFECYCLE] Command failed with exit code 1.

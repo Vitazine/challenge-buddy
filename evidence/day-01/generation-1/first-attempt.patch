@@ -1,0 +1,1277 @@
+diff --git a/AGENTS.md b/AGENTS.md
+new file mode 100644
+--- /dev/null
++++ b/AGENTS.md
+@@ -0,0 +1,144 @@
++# Challenge Buddy — правила проекта, v1
++
++## Область работы
++
++Telegram Mini App для личных ежедневных челленджей. Выполняй только текущую задачу Дня 1. Материалы `Tasks/Day 2.rtf` — `Day 5.rtf` не являются очередью работ. Не разворачивай изменения на VPS. Не добавляй восстановление из архива, напоминания, группы, новые инструменты тестирования или зависимости без необходимости текущей задачи.
++
++## Стек и запуск
++
++- Node.js 24, pnpm 11.25.0; TypeScript strict, ES modules.
++- React 19, Vite 7, обычный CSS; Fastify 5, Zod 4, `node:sqlite`.
++- Тесты: `node:test` и `node:assert/strict`, запуск через tsx.
++- `./scripts/pnpm.sh dev` — локальная разработка; `./scripts/pnpm.sh check` — типы, линтер, тесты, сборка.
++- Отдельные проверки: `./scripts/pnpm.sh typecheck`, `lint`, `test`, `build`.
++- Если tsx не может создать IPC-сокет из-за sandbox EPERM, это ограничение среды. Сохрани сообщение и запроси штатное разрешение на запуск проверки либо используй эквивалентный `node --import tsx --test tests/*.test.ts`. Не меняй код ради обхода ограничений среды.
++
++## Структура и архитектура
++
++Путь запроса: React → `src/api.ts` → маршрут `server/app.ts` → `ChallengeService` → `ChallengeRepository` → SQLite.
++
++- `src/components/`: представление, доступные элементы управления; данные и операции через props.
++- `src/hooks/useChallengeApp.ts`: состояние экранов, загрузка, блокировка повторного сохранения, Telegram BackButton.
++- `src/api.ts`: HTTP, заголовки входа, таймаут, единое представление ошибок.
++- `server/app.ts`: Zod на входе, подтверждённый владелец, HTTP-статусы; не бизнес-правила.
++- `server/challenges.ts`: правила, серверная дата и представление челленджа. Часы передаются зависимостью для воспроизводимых тестов.
++- `server/repository.ts`: схема, параметризованный SQL, хранение. Существующие данные должны сохраняться при изменении схемы.
++- `shared/contracts.ts`: общие типы и схемы; `shared/dates.ts`: календарные функции.
++- `tests/`: API, предметная логика, авторизация. Используй существующие helpers.
++- `docs/architecture.md` и README: фактический контракт и описание приложения, обновляй при изменении поведения.
++
++## Стиль и именование
++
++- Компоненты и классы — PascalCase; функции, поля, переменные — camelCase; хуки — `use…`.
++- Имена файлов следуют соседним: `ChallengeDetail.tsx`, `challenges.ts`, `api.test.ts`.
++- Двойные кавычки, точки с запятой, два пробела, форматирование Prettier.
++- Именованные экспорты; `import type` для типов. Сохраняй локальный порядок импортов: внешние, shared, внутренние.
++- Ошибки неизвестного происхождения сужай из `unknown`. Новый код не должен расширять небезопасные приведения типов.
++- Числовой прогресс, доступность отметки, локальная дата и срок приходят с сервера. UI лишь отображает их.
++- Русские пользовательские тексты; технические идентификаторы на английском.
++- Сохраняй существующие зелёные/лаймовые CSS-переменные, классы и адаптивность. Семантические кнопки, видимые подписи, состояния загрузки/ошибки/пустого списка, блокировка действий во время сохранения.
++
++## Пять примеров из исходного проекта
++
++### 1. Валидация и тип из одной схемы — shared/contracts.ts
++
++```ts
++export const createChallengeSchema = z
++  .object({
++    title: z.string().trim().min(1, "Добавьте название").max(80, "Не более 80 символов"),
++    startDate: dateSchema,
++    duration: z.number().int().min(1).max(30),
++    timeZone: z.string().max(100).refine((value) => {
++      try {
++        new Intl.DateTimeFormat("en", { timeZone: value });
++        return true;
++      } catch {
++        return false;
++      }
++    }, "Неизвестный часовой пояс"),
++  })
++  .strict();
++export type CreateChallengeInput = z.infer<typeof createChallengeSchema>;
++```
++
++Фрагмент сохранён с сокращённым форматированием. Повторяй единый источник типов и валидации, ограничения и запрет лишних полей.
++
++### 2. Тонкий HTTP-обработчик — server/app.ts
++
++```ts
++api.post("/challenges", async (request, reply) => {
++  const challenge = service.create(
++    owners.get(request)!,
++    createChallengeSchema.parse(request.body),
++  );
++  return reply.code(201).send(challenge);
++});
++```
++
++Владелец берётся из существующего слоя входа, сервис получает проверенный ввод.
++
++### 3. Проверка владельца и единая ошибка — server/challenges.ts
++
++```ts
++get(ownerId: string, id: string): Challenge {
++  const record = this.repository.find(id, ownerId);
++  if (!record) throw new AppError(404, "NOT_FOUND", "Челлендж не найден.");
++  return this.present(record);
++}
++```
++
++Чужой и отсутствующий объект одинаково недоступны. HTTP-ответ формирует общий error handler.
++
++### 4. Параметризованный SQL — server/repository.ts
++
++```ts
++find(id: string, ownerId: string): ChallengeRecord | undefined {
++  return this.db
++    .prepare("SELECT * FROM challenges WHERE id = ? AND ownerId = ?")
++    .get(id, ownerId) as unknown as ChallengeRecord | undefined;
++}
++```
++
++SQL остаётся в repository, значения передаются отдельно, выборка ограничена владельцем. Приведение в этом существующем адаптере не является разрешением на произвольные касты в новом коде.
++
++### 5. Предметные утверждения и фиксированное время — tests/domain.test.ts
++
++```ts
++test("future challenge cannot be checked in", () => {
++  const repository = new ChallengeRepository(":memory:");
++  const service = new ChallengeService(repository, () => now);
++  const challenge = service.create("42", {
++    ...challengeInput,
++    startDate: "2026-10-25",
++  });
++  assert.equal(challenge.status, "upcoming");
++  assert.throws(() => service.checkIn("42", challenge.id, true), /вне срока/);
++  repository.close();
++});
++```
++
++Повторяй наблюдаемое поведение, изолированную БД и управляемые часы.
++
++## Пять антипаттернов
++
++1. `any`, `@ts-ignore`, отключение линтера/тестов ради зелёной проверки.
++2. `ownerId` из тела запроса или доверие Telegram `initDataUnsafe`; владелец определяется только существующей серверной авторизацией.
++3. SQL в React, HTTP-маршрутах или сервисе; интерполяция пользовательских значений в SQL.
++4. Дублирование вычислений срока, прогресса и разрешений в UI и сервере; клиентская проверка как единственная защита.
++5. Секреты/реальные initData в коде, логах или артефактах; отладочный `console.log` в продуктовом коде; чтение или изменение рабочей базы ради тестов.
++
++## Шаблоны типичного файла
++
++Компонент: импорты типов/локальных компонентов → интерфейс props → именованная функция → вычисления для отображения → семантический JSX. Fetch и бизнес-правила остаются в своих слоях.
++
++Сервис/репозиторий: импорты → типы → именованный класс → зависимости в конструкторе → небольшие методы. Сервис выбрасывает `AppError`, репозиторий работает с SQLite.
++
++Тест: импорты `node:test`/assert → helpers → сценарий → подготовка → действие → утверждения → закрытие ресурсов через `t.after`, когда это уместно. Проверяй последствия, а не текст реализации.
++
++## Скиллы, субагент и завершение
++
++Для текущей задачи прочитай и примени `api-and-interface-design`, `security-and-hardening` и `frontend-ui-engineering` из каталога доступных скиллов. Сохраняй архитектуру этого проекта при выборе общих рекомендаций скилла. Общие предпочтения экспериментального профиля передаются отдельно и одинаково в обоих запусках.
++
++Сначала реализуй задачу, затем запусти существующий check и самостоятельную проверку затронутого поведения. Внешний проверяющий субагент отдельно оценит зафиксированный результат; не исправляй его после внешнего ревью в рамках этой генерации. Не создавай новых пользовательских чатов и не переходи к другим дням.
++
++В итоговом ответе перечисли изменённые файлы, команды и результаты проверок, фактическое применение скиллов и оставшиеся ограничения. Не объявляй проверку успешной, если она не выполнялась.
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -79,6 +79,7 @@
+ - Начальная и конечная даты включаются в срок. Допускается выбрать прошлую или будущую дату старта.
+ - Часовой пояс берется из устройства при создании и сохраняется в челлендже.
+ - Только сервер определяет текущую дату. Отметить и отменить можно только сегодня и только внутри срока.
++- Свой челлендж можно отправить в архив из его деталей. Архив открывается кнопкой «Архив» в списке; история и прогресс сохраняются, обе операции с отметками запрещены. Повторное архивирование безопасно; восстановление не предусмотрено.
+ - Повторный PUT не дублирует отметку. Повторный DELETE не меняет результат.
+ - Процент = количество отметок / длительность × 100, округленный до целого.
+ - «Завершен» означает, что срок закончился; это не обязательно 100% выполнения.
+@@ -95,7 +96,7 @@
+ 
+ Прямое открытие production-приложения в обычном браузере покажет просьбу открыть Telegram. Подписанные initData действуют один час; после истечения нужно переоткрыть приложение. Долгоживущая серверная сессия в MVP не реализована.
+ 
+-Архивирование, напоминания и групповые челленджи пока не реализованы. Архивирование оставлено для Дня 1. До публичного запуска для реальных пользователей нужно добавить удаление/экспорт персональных данных и согласовать срок хранения. Текущая версия предназначена для личного учебного тестирования.
++Напоминания и групповые челленджи пока не реализованы. До публичного запуска для реальных пользователей нужно добавить удаление/экспорт персональных данных и согласовать срок хранения. Текущая версия предназначена для личного учебного тестирования.
+ 
+ ## Документация
+ 
+diff --git a/docs/architecture.md b/docs/architecture.md
+--- a/docs/architecture.md
++++ b/docs/architecture.md
+@@ -16,25 +16,31 @@
+ |---|---|---|
+ | GET | /api/health | 200, состояние процесса, без пользовательских данных |
+ | GET | /api/session | 200, режим авторизации |
+-| GET | /api/challenges?page=1&pageSize=20 | 200, items/page/pageSize/total; максимум 50 записей |
++| GET | /api/challenges?page=1&pageSize=20&archived=false | 200, items/page/pageSize/total; максимум 50 записей; обычный список по умолчанию |
++| GET | /api/challenges?archived=true | 200, только архив текущего владельца; та же пагинация |
+ | POST | /api/challenges | 201, созданный челлендж |
+ | GET | /api/challenges/:id | 200, один челлендж; 404 для отсутствующего или чужого |
++| PUT | /api/challenges/:id/archive | 200, архивный челлендж; повтор безопасен, дата архива неизменна |
+ | PUT | /api/challenges/:id/check-ins/today | 200, состояние после отметки; идемпотентно |
+ | DELETE | /api/challenges/:id/check-ins/today | 200, состояние после отмены; идемпотентно в пределах дня |
+ 
++Параметр `archived` принимает только строки `true` / `false`, по умолчанию `false`. Неверные и неизвестные параметры отклоняются с 422. `total` и пагинация относятся к выбранному списку и текущему владельцу.
++
++Архивирование не принимает полей (допустимы отсутствие тела или `{}`). Владелец определяется авторизацией. Чужой или отсутствующий ID возвращает 404; неверный UUID — 422. Ответ `Challenge` содержит `archivedAt: string | null`. Архив не изменяет календарный `status`, `checkIns`, `progress` и даты; `canCheckIn` всегда false. GET деталей доступен владельцу в обоих списках. PUT и DELETE отметки в архиве возвращают 409 `ARCHIVED`. Восстановления и удаления нет.
++
+ POST принимает `title`, `startDate` в YYYY-MM-DD, `duration`, `timeZone`. Владелец из тела запроса не принимается. Контракты определены в `shared/contracts.ts`.
+ 
+-Ошибки единообразны: `{ "error": { "code": "...", "message": "..." } }`. Статусы: 401 — нет входа; 404 — нет доступного объекта; 409 — действие вне срока; 422 — некорректные поля; 429 — ограничение частоты; 500 — внутренняя ошибка без деталей.
++Ошибки единообразны: `{ "error": { "code": "...", "message": "..." } }`. Статусы: 401 — нет входа; 404 — нет доступного объекта; 409 — действие вне срока (`OUTSIDE_PERIOD`) или изменение отметок в архиве (`ARCHIVED`); 422 — некорректные поля; 429 — ограничение частоты; 500 — внутренняя ошибка без деталей.
+ 
+ POST создания не идемпотентен: после сетевого таймаута нельзя автоматически повторять его. Сначала проверить список. UI блокирует повторное нажатие во время запроса; сквозной Idempotency-Key можно добавить отдельной учебной задачей. PUT/DELETE отметки рассчитывают «сегодня» заново на сервере при каждом запросе.
+ 
+ ## Хранение
+ 
+-`challenges`: id, ownerId, title, startDate, duration, timeZone, createdAt.
++`challenges`: id, ownerId, title, startDate, duration, timeZone, createdAt, archivedAt (NULL или ISO-время UTC).
+ 
+ `check_ins`: challengeId, date. Составной PRIMARY KEY запрещает дубли даже при одновременных запросах. Внешний ключ с каскадом подготовлен для будущего удаления челленджа.
+ 
+-Версия начальной схемы — 1. При дальнейшем изменении структуры нужны версионированные миграции; не изменять CREATE TABLE и не считать это миграцией существующей базы.
++Версия схемы — 2. Миграция 1 → 2 в транзакции добавляет nullable-столбец `archivedAt` без удаления существующих записей или отметок. Старые челленджи остаются в обычном списке. Повторное открытие базы не повторяет миграцию.
+ 
+ Параметризованный SQL находится только в repository. Для маленького проекта это проще ORM и сохраняет четкую границу. Отдельная таблица пользователей не нужна: приложение хранит только подтвержденный Telegram ID, не копирует имя, username, фото или initData в базу.
+ 
+@@ -54,4 +60,6 @@
+ 
+ Рабочая гипотеза без стороннего макета: спокойный ежедневник, теплый светлый фон, темно-зеленые действия и лаймовые отметки. Главное действие списка — создание; в деталях — отметка сегодняшнего дня. На мобильном одна колонка, на широком экране рядом с календарем показан прогресс.
+ 
++Архив использует существующие карточки, календарь и прогресс. Заголовок и текст явно показывают доступ только для чтения; кнопки отметки и архивирования скрыты. Перед действием есть текст о запрете изменения отметок и отсутствии восстановления. Переход в архив сбрасывает пагинацию, возврат из его деталей ведёт в архив; пустое состояние, загрузка и ошибка с повтором обрабатываются отдельно от обычного списка.
++
+ Обязательные состояния: загрузка, пустой список, ошибка с повтором, ожидание сохранения, отметка, отмена, будущий/завершенный челлендж, отсутствие Telegram-входа. Формы имеют видимые подписи; календарь — текстовые статусы, не только цвет; системная кнопка Back в Telegram возвращает к списку.
+diff --git a/server/app.ts b/server/app.ts
+--- a/server/app.ts
++++ b/server/app.ts
+@@ -3,7 +3,11 @@
+ import rateLimit from "@fastify/rate-limit";
+ import staticFiles from "@fastify/static";
+ import { z, ZodError } from "zod";
+-import { createChallengeSchema } from "../shared/contracts";
++import {
++  archiveChallengeSchema,
++  createChallengeSchema,
++  listChallengesSchema,
++} from "../shared/contracts";
+ import { validateInitData } from "./auth";
+ import { AppError } from "./errors";
+ import { ChallengeRepository } from "./repository";
+@@ -49,14 +53,12 @@
+   await app.register(rateLimit, { max: 120, timeWindow: "1 minute" });
+   app.setErrorHandler((error, _request, reply) => {
+     if (error instanceof ZodError)
+-      return reply
+-        .code(422)
+-        .send({
+-          error: {
+-            code: "VALIDATION_ERROR",
+-            message: "Проверьте название, дату, длительность и часовой пояс.",
+-          },
+-        });
++      return reply.code(422).send({
++        error: {
++          code: "VALIDATION_ERROR",
++          message: "Проверьте название, дату, длительность и часовой пояс.",
++        },
++      });
+     if (error instanceof AppError)
+       return reply
+         .code(error.statusCode)
+@@ -68,17 +70,15 @@
+       error.statusCode < 500
+         ? error.statusCode
+         : 500;
+-    return reply
+-      .code(status)
+-      .send({
+-        error: {
+-          code: status === 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR",
+-          message:
+-            status === 429
+-              ? "Слишком много запросов. Попробуйте через минуту."
+-              : "Не удалось обработать запрос.",
+-        },
+-      });
++    return reply.code(status).send({
++      error: {
++        code: status === 500 ? "INTERNAL_ERROR" : "REQUEST_ERROR",
++        message:
++          status === 429
++            ? "Слишком много запросов. Попробуйте через минуту."
++            : "Не удалось обработать запрос.",
++      },
++    });
+   });
+   app.get("/api/health", async () => ({ status: "ok" }));
+   app.get("/healthz", async () => ({ status: "ok" }));
+@@ -133,13 +133,13 @@
+         mode: options.devAuth ? "development" : "telegram",
+       }));
+       api.get("/challenges", async (request) => {
+-        const query = z
+-          .object({
+-            page: z.coerce.number().int().min(1).max(100000).default(1),
+-            pageSize: z.coerce.number().int().min(1).max(50).default(20),
+-          })
+-          .parse(request.query);
+-        return service.list(owners.get(request)!, query.page, query.pageSize);
++        const query = listChallengesSchema.parse(request.query);
++        return service.list(
++          owners.get(request)!,
++          query.page,
++          query.pageSize,
++          query.archived,
++        );
+       });
+       api.post("/challenges", async (request, reply) => {
+         const challenge = service.create(
+@@ -153,6 +153,10 @@
+       api.get("/challenges/:id", async (request) =>
+         service.get(owners.get(request)!, idOf(request.params)),
+       );
++      api.put("/challenges/:id/archive", async (request) => {
++        archiveChallengeSchema.parse(request.body ?? {});
++        return service.archive(owners.get(request)!, idOf(request.params));
++      });
+       api.put("/challenges/:id/check-ins/today", async (request) =>
+         service.checkIn(owners.get(request)!, idOf(request.params), true),
+       );
+diff --git a/server/challenges.ts b/server/challenges.ts
+--- a/server/challenges.ts
++++ b/server/challenges.ts
+@@ -20,7 +20,10 @@
+       today,
+       checkIns,
+       progress: Math.round((checkIns.length / record.duration) * 100),
+-      canCheckIn: today >= record.startDate && today <= endDate,
++      canCheckIn:
++        record.archivedAt === null &&
++        today >= record.startDate &&
++        today <= endDate,
+       status:
+         today < record.startDate
+           ? "upcoming"
+@@ -29,14 +32,14 @@
+             : "active",
+     };
+   }
+-  list(ownerId: string, page: number, pageSize: number) {
++  list(ownerId: string, page: number, pageSize: number, archived = false) {
+     return {
+       items: this.repository
+-        .list(ownerId, pageSize, (page - 1) * pageSize)
++        .list(ownerId, pageSize, (page - 1) * pageSize, archived)
+         .map((row) => this.present(row)),
+       page,
+       pageSize,
+-      total: this.repository.count(ownerId),
++      total: this.repository.count(ownerId, archived),
+     };
+   }
+   create(ownerId: string, input: CreateChallengeInput): Challenge {
+@@ -47,8 +50,19 @@
+     if (!record) throw new AppError(404, "NOT_FOUND", "Челлендж не найден.");
+     return this.present(record);
+   }
++  archive(ownerId: string, id: string): Challenge {
++    this.get(ownerId, id);
++    this.repository.archive(id, ownerId, this.clock());
++    return this.get(ownerId, id);
++  }
+   checkIn(ownerId: string, id: string, marked: boolean): Challenge {
+     const challenge = this.get(ownerId, id);
++    if (challenge.archivedAt !== null)
++      throw new AppError(
++        409,
++        "ARCHIVED",
++        "В архиве нельзя добавлять и отменять отметки.",
++      );
+     if (!challenge.canCheckIn)
+       throw new AppError(
+         409,
+diff --git a/server/repository.ts b/server/repository.ts
+--- a/server/repository.ts
++++ b/server/repository.ts
+@@ -6,6 +6,7 @@
+   id: string;
+   ownerId: string;
+   createdAt: string;
++  archivedAt: string | null;
+ }
+ 
+ export class ChallengeRepository {
+@@ -26,8 +27,24 @@
+         challengeId TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+         date TEXT NOT NULL, PRIMARY KEY(challengeId, date)
+       );
+-      PRAGMA user_version = 1;
+     `);
++    const version = Number(
++      this.db.prepare("PRAGMA user_version").get()!.user_version,
++    );
++    if (version < 2) {
++      this.db.exec("BEGIN IMMEDIATE");
++      try {
++        this.db.exec(`
++          ALTER TABLE challenges ADD COLUMN archivedAt TEXT DEFAULT NULL;
++          PRAGMA user_version = 2;
++          COMMIT;
++        `);
++      } catch (error) {
++        this.db.exec("ROLLBACK");
++        this.db.close();
++        throw error;
++      }
++    }
+   }
+   create(
+     ownerId: string,
+@@ -39,9 +56,12 @@
+       id: randomUUID(),
+       ownerId,
+       createdAt: now.toISOString(),
++      archivedAt: null,
+     };
+     this.db
+-      .prepare("INSERT INTO challenges VALUES (?, ?, ?, ?, ?, ?, ?)")
++      .prepare(
++        "INSERT INTO challenges (id, ownerId, title, startDate, duration, timeZone, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
++      )
+       .run(
+         record.id,
+         ownerId,
+@@ -53,24 +73,43 @@
+       );
+     return record;
+   }
+-  list(ownerId: string, limit: number, offset: number): ChallengeRecord[] {
++  list(
++    ownerId: string,
++    limit: number,
++    offset: number,
++    archived = false,
++  ): ChallengeRecord[] {
+     return this.db
+       .prepare(
+-        "SELECT * FROM challenges WHERE ownerId = ? ORDER BY createdAt DESC, id DESC LIMIT ? OFFSET ?",
++        "SELECT * FROM challenges WHERE ownerId = ? AND (archivedAt IS NOT NULL) = ? ORDER BY createdAt DESC, id DESC LIMIT ? OFFSET ?",
+       )
+-      .all(ownerId, limit, offset) as unknown as ChallengeRecord[];
++      .all(
++        ownerId,
++        Number(archived),
++        limit,
++        offset,
++      ) as unknown as ChallengeRecord[];
+   }
+-  count(ownerId: string): number {
++  count(ownerId: string, archived = false): number {
+     return Number(
+       this.db
+-        .prepare("SELECT COUNT(*) AS count FROM challenges WHERE ownerId = ?")
+-        .get(ownerId)!.count,
++        .prepare(
++          "SELECT COUNT(*) AS count FROM challenges WHERE ownerId = ? AND (archivedAt IS NOT NULL) = ?",
++        )
++        .get(ownerId, Number(archived))!.count,
+     );
+   }
+   find(id: string, ownerId: string): ChallengeRecord | undefined {
+     return this.db
+       .prepare("SELECT * FROM challenges WHERE id = ? AND ownerId = ?")
+       .get(id, ownerId) as unknown as ChallengeRecord | undefined;
++  }
++  archive(id: string, ownerId: string, now: Date): void {
++    this.db
++      .prepare(
++        "UPDATE challenges SET archivedAt = ? WHERE id = ? AND ownerId = ? AND archivedAt IS NULL",
++      )
++      .run(now.toISOString(), id, ownerId);
+   }
+   dates(id: string): string[] {
+     return this.db
+diff --git a/shared/contracts.ts b/shared/contracts.ts
+--- a/shared/contracts.ts
++++ b/shared/contracts.ts
+@@ -34,10 +34,24 @@
+   })
+   .strict();
+ 
++export const listChallengesSchema = z
++  .object({
++    page: z.coerce.number().int().min(1).max(100000).default(1),
++    pageSize: z.coerce.number().int().min(1).max(50).default(20),
++    archived: z
++      .enum(["true", "false"])
++      .default("false")
++      .transform((value) => value === "true"),
++  })
++  .strict();
++
++export const archiveChallengeSchema = z.object({}).strict();
++
+ export type CreateChallengeInput = z.infer<typeof createChallengeSchema>;
+ export interface Challenge extends CreateChallengeInput {
+   id: string;
+   createdAt: string;
++  archivedAt: string | null;
+   endDate: string;
+   checkIns: string[];
+   today: string;
+diff --git a/src/App.tsx b/src/App.tsx
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -5,6 +5,9 @@
+ import { useChallengeApp } from "./hooks/useChallengeApp";
+ export function App() {
+   const {
++    archived,
++    showList,
++    archive,
+     view,
+     setView,
+     items,
+@@ -29,7 +32,7 @@
+       <header className="header">
+         <button
+           className="brand"
+-          onClick={back}
++          onClick={() => showList(false)}
+           disabled={pending}
+           aria-label="Challenge Buddy — мои челленджи"
+         >
+@@ -44,9 +47,9 @@
+         <span className="edition">ТВОЙ РИТМ</span>
+       </header>
+       <main ref={main} tabIndex={-1}>
+-        {view.type !== "list" && (
++        {(view.type !== "list" || archived) && (
+           <button className="back" onClick={back} disabled={pending}>
+-            ← Мои челленджи
++            ← {view.type === "detail" && archived ? "Архив" : "Мои челленджи"}
+           </button>
+         )}
+         {session?.mode === "development" && (
+@@ -73,6 +76,8 @@
+         </div>
+         {view.type === "list" && (
+           <Dashboard
++            archived={archived}
++            onArchive={() => showList(true)}
+             items={items}
+             total={total}
+             page={page}
+@@ -100,6 +105,7 @@
+           <ChallengeDetail
+             challenge={view.challenge}
+             pending={pending}
++            onArchive={() => void archive(view.challenge.id)}
+             onToggle={() => {
+               const checked = view.challenge.checkIns.includes(
+                 view.challenge.today,
+diff --git a/src/api.ts b/src/api.ts
+--- a/src/api.ts
++++ b/src/api.ts
+@@ -29,13 +29,16 @@
+ }
+ export const api = {
+   session: () => request<Session>("/session"),
+-  list: (page = 1) => request<ChallengeList>(`/challenges?page=${page}`),
++  list: (page = 1, archived = false) =>
++    request<ChallengeList>(`/challenges?page=${page}&archived=${archived}`),
+   get: (id: string) => request<Challenge>(`/challenges/${id}`),
+   create: (input: CreateChallengeInput) =>
+     request<Challenge>("/challenges", {
+       method: "POST",
+       body: JSON.stringify(input),
+     }),
++  archive: (id: string) =>
++    request<Challenge>(`/challenges/${id}/archive`, { method: "PUT" }),
+   checkIn: (id: string, checked: boolean) =>
+     request<Challenge>(`/challenges/${id}/check-ins/today`, {
+       method: checked ? "PUT" : "DELETE",
+diff --git a/src/components/ChallengeCard.tsx b/src/components/ChallengeCard.tsx
+--- a/src/components/ChallengeCard.tsx
++++ b/src/components/ChallengeCard.tsx
+@@ -11,13 +11,15 @@
+ }) {
+   const checked = challenge.checkIns.includes(challenge.today);
+   const status =
+-    challenge.status === "upcoming"
+-      ? "Скоро старт"
+-      : challenge.status === "finished"
+-        ? "Завершен"
+-        : checked
+-          ? "Сегодня сделано"
+-          : "Ждет твоего шага";
++    challenge.archivedAt !== null
++      ? "В архиве"
++      : challenge.status === "upcoming"
++        ? "Скоро старт"
++        : challenge.status === "finished"
++          ? "Завершен"
++          : checked
++            ? "Сегодня сделано"
++            : "Ждет твоего шага";
+   return (
+     <li>
+       <button className="challenge-card" onClick={onOpen}>
+diff --git a/src/components/ChallengeDetail.tsx b/src/components/ChallengeDetail.tsx
+--- a/src/components/ChallengeDetail.tsx
++++ b/src/components/ChallengeDetail.tsx
+@@ -6,10 +6,12 @@
+   challenge,
+   pending,
+   onToggle,
++  onArchive,
+ }: {
+   challenge: Challenge;
+   pending: boolean;
+   onToggle: () => void;
++  onArchive: () => void;
+ }) {
+   const checked = challenge.checkIns.includes(challenge.today);
+   const days = Array.from({ length: challenge.duration }, (_, index) =>
+@@ -32,22 +34,26 @@
+             <div>
+               <p className="eyebrow">{formatDate(challenge.today)} · СЕГОДНЯ</p>
+               <h2>
+-                {challenge.status === "upcoming"
+-                  ? "Всё начинается скоро"
+-                  : challenge.status === "finished"
+-                    ? "Челлендж завершен"
+-                    : checked
+-                      ? "Еще один шаг сделан!"
+-                      : "Один маленький шаг"}
++                {challenge.archivedAt !== null
++                  ? "Челлендж в архиве"
++                  : challenge.status === "upcoming"
++                    ? "Всё начинается скоро"
++                    : challenge.status === "finished"
++                      ? "Челлендж завершен"
++                      : checked
++                        ? "Еще один шаг сделан!"
++                        : "Один маленький шаг"}
+               </h2>
+               <p>
+-                {challenge.status === "upcoming"
+-                  ? `Первая отметка будет доступна ${formatDate(challenge.startDate)}.`
+-                  : challenge.status === "finished"
+-                    ? "Твоя история и прогресс останутся здесь."
+-                    : checked
+-                      ? "Отметка сохранена. До завтра!"
+-                      : "Выполни свое действие и отметь этот день."}
++                {challenge.archivedAt !== null
++                  ? "История и прогресс сохранены. Добавление и отмена отметок недоступны."
++                  : challenge.status === "upcoming"
++                    ? `Первая отметка будет доступна ${formatDate(challenge.startDate)}.`
++                    : challenge.status === "finished"
++                      ? "Твоя история и прогресс останутся здесь."
++                      : checked
++                        ? "Отметка сохранена. До завтра!"
++                        : "Выполни свое действие и отметь этот день."}
+               </p>
+             </div>
+             {challenge.canCheckIn && (
+@@ -110,6 +116,21 @@
+             Главное — продолжать.
+           </p>
+           <p className="hint">Часовой пояс: {challenge.timeZone}</p>
++          {challenge.archivedAt === null && (
++            <>
++              <p className="hint" id="archive-hint">
++                В архиве нельзя менять отметки. Восстановление недоступно.
++              </p>
++              <button
++                className="secondary full"
++                onClick={onArchive}
++                disabled={pending}
++                aria-describedby="archive-hint"
++              >
++                {pending ? "Сохраняем…" : "Архивировать челлендж"}
++              </button>
++            </>
++          )}
+         </aside>
+       </div>
+     </section>
+diff --git a/src/components/Dashboard.tsx b/src/components/Dashboard.tsx
+--- a/src/components/Dashboard.tsx
++++ b/src/components/Dashboard.tsx
+@@ -1,6 +1,8 @@
+ import type { Challenge } from "../../shared/contracts";
+ import { ChallengeCard } from "./ChallengeCard";
+ interface DashboardProps {
++  archived: boolean;
++  onArchive: () => void;
+   items: Challenge[];
+   total: number;
+   page: number;
+@@ -12,6 +14,8 @@
+   onPage: (page: number) => void;
+ }
+ export function Dashboard({
++  archived,
++  onArchive,
+   items,
+   total,
+   page,
+@@ -27,51 +31,67 @@
+   ).length;
+   return (
+     <>
+-      <section className="welcome">
+-        <div>
+-          <p className="eyebrow">ПРОГРЕСС НАЧИНАЕТСЯ С ТЕБЯ</p>
+-          <h1>
+-            Большие перемены.
+-            <br />
+-            <span>Маленькими шагами.</span>
+-          </h1>
++      {archived ? (
++        <section>
++          <p className="eyebrow">ТВОЯ ИСТОРИЯ</p>
++          <h1>Архив челленджей</h1>
+           <p className="intro">
+-            Выбери свой челлендж. Приходи каждый день.
+-            <br />
+-            Замечай, как далеко ты уже прошел.
++            История и прогресс сохранены. Отметки в архиве менять нельзя.
+           </p>
+-          <button className="primary" onClick={onCreate} disabled={!ready}>
+-            + Новый челлендж
+-          </button>
+-        </div>
+-        <div className="rhythm-art" aria-hidden="true">
+-          <div className="art-caption">ДЕНЬ ЗА ДНЕМ</div>
+-          <div className="art-path">
+-            <i>✓</i>
+-            <i>✓</i>
+-            <i>↗</i>
+-            <i>4</i>
+-            <i>5</i>
+-            <i>6</i>
+-            <i>7</i>
++        </section>
++      ) : (
++        <section className="welcome">
++          <div>
++            <p className="eyebrow">ПРОГРЕСС НАЧИНАЕТСЯ С ТЕБЯ</p>
++            <h1>
++              Большие перемены.
++              <br />
++              <span>Маленькими шагами.</span>
++            </h1>
++            <p className="intro">
++              Выбери свой челлендж. Приходи каждый день.
++              <br />
++              Замечай, как далеко ты уже прошел.
++            </p>
++            <button className="primary" onClick={onCreate} disabled={!ready}>
++              + Новый челлендж
++            </button>
+           </div>
+-          <p>
+-            Не идеально.
+-            <br />
+-            <strong>Зато вперед.</strong>
+-          </p>
+-          <span className="art-spark">✳</span>
+-        </div>
+-      </section>
++          <div className="rhythm-art" aria-hidden="true">
++            <div className="art-caption">ДЕНЬ ЗА ДНЕМ</div>
++            <div className="art-path">
++              <i>✓</i>
++              <i>✓</i>
++              <i>↗</i>
++              <i>4</i>
++              <i>5</i>
++              <i>6</i>
++              <i>7</i>
++            </div>
++            <p>
++              Не идеально.
++              <br />
++              <strong>Зато вперед.</strong>
++            </p>
++            <span className="art-spark">✳</span>
++          </div>
++        </section>
++      )}
+       <section className="list-section">
+         <div className="section-heading">
+           <div>
+             <p className="eyebrow">ТО, ЧТО ВАЖНО ТЕБЕ</p>
+             <h2>
+-              Мои челленджи <span className="count">{total}</span>
++              {archived ? "В архиве" : "Мои челленджи"}{" "}
++              <span className="count">{total}</span>
+             </h2>
+           </div>
+-          {items.length > 0 && (
++          {!archived && (
++            <button className="secondary" onClick={onArchive} disabled={!ready}>
++              Архив
++            </button>
++          )}
++          {!archived && items.length > 0 && (
+             <span className="muted">
+               Сегодня отмечено: {todayCount}
+               {total > 20 ? " на странице" : ""}
+@@ -101,16 +121,24 @@
+                 ↗
+               </span>
+               <div>
+-                <h3>Здесь начнется твоя история</h3>
++                <h3>
++                  {archived ? "Архив пока пуст" : "Здесь начнется твоя история"}
++                </h3>
+                 <p>
+-                  Семь дней чтения, прогулок или нового навыка.
+-                  <br />
+-                  Начни с того, что давно хотелось попробовать.
++                  {archived
++                    ? "Здесь появятся челленджи, которые ты отправишь в архив."
++                    : "Семь дней чтения, прогулок или нового навыка. Начни с того, что давно хотелось попробовать."}
+                 </p>
+               </div>
+-              <button className="text-button" onClick={onCreate}>
+-                Создать первый челлендж →
+-              </button>
++              {!archived && (
++                <button
++                  className="text-button"
++                  onClick={onCreate}
++                  disabled={!ready}
++                >
++                  Создать первый челлендж →
++                </button>
++              )}
+             </div>
+           )
+         )}
+diff --git a/src/hooks/useChallengeApp.ts b/src/hooks/useChallengeApp.ts
+--- a/src/hooks/useChallengeApp.ts
++++ b/src/hooks/useChallengeApp.ts
+@@ -12,6 +12,7 @@
+   | { type: "detail"; challenge: Challenge };
+ export function useChallengeApp() {
+   const [view, setView] = useState<View>({ type: "list" });
++  const [archived, setArchived] = useState(false);
+   const [items, setItems] = useState<Challenge[]>([]);
+   const [session, setSession] = useState<Session>();
+   const [page, setPage] = useState(1);
+@@ -21,47 +22,83 @@
+   const [error, setError] = useState("");
+   const [notice, setNotice] = useState("");
+   const mutationLock = useRef(false);
++  const loadVersion = useRef(0);
+   const main = useRef<HTMLElement>(null);
+   const load = useCallback(
+-    () =>
+-      Promise.all([api.session(), api.list(page)])
+-        .then(([currentSession, list]) => {
+-          setError("");
+-          setSession(currentSession);
+-          setItems(list.items);
+-          setTotal(list.total);
+-        })
+-        .catch((cause: unknown) => {
+-          setError(
+-            cause instanceof Error
+-              ? cause.message
+-              : "Не удалось загрузить челленджи.",
+-          );
+-        })
+-        .finally(() => setLoading(false)),
+-    [page],
++    async (showLoading = true) => {
++      const version = ++loadVersion.current;
++      if (showLoading) setLoading(true);
++      try {
++        const [currentSession, list] = await Promise.all([
++          api.session(),
++          api.list(page, archived),
++        ]);
++        if (version !== loadVersion.current) return;
++        if (page > 1 && list.items.length === 0) {
++          setPage(Math.max(1, Math.ceil(list.total / list.pageSize)));
++          return;
++        }
++        setError("");
++        setSession(currentSession);
++        setItems(list.items);
++        setTotal(list.total);
++      } catch (cause: unknown) {
++        if (version !== loadVersion.current) return;
++        setItems([]);
++        setError(
++          cause instanceof Error
++            ? cause.message
++            : "Не удалось загрузить челленджи.",
++        );
++      } finally {
++        if (version === loadVersion.current) setLoading(false);
++      }
++    },
++    [page, archived],
+   );
+   useEffect(() => {
+     void load();
++    return () => {
++      loadVersion.current += 1;
++    };
+   }, [load]);
+   useEffect(() => {
+     main.current?.focus({ preventScroll: true });
+     window.scrollTo({ top: 0 });
+-  }, [view.type]);
+-  const back = useCallback(() => {
++  }, [view.type, archived]);
++  const showList = (nextArchived: boolean) => {
++    if (mutationLock.current) return;
++    setLoading(true);
++    setItems([]);
++    setPage(1);
++    setArchived(nextArchived);
+     setView({ type: "list" });
+     setError("");
+     setNotice("");
+-    void load();
+-  }, [load]);
++    if (nextArchived === archived && page === 1) void load();
++  };
++  const back = useCallback(() => {
++    if (mutationLock.current) return;
++    if (view.type === "list" && archived) {
++      setArchived(false);
++      setPage(1);
++      setItems([]);
++      setLoading(true);
++    } else {
++      setView({ type: "list" });
++      void load();
++    }
++    setError("");
++    setNotice("");
++  }, [load, view.type, archived]);
+   useEffect(() => {
+     const button = telegram?.BackButton;
+     if (!telegram?.initData || !button) return;
+-    if (view.type === "list") button.hide();
++    if (view.type === "list" && !archived) button.hide();
+     else button.show();
+     button.onClick(back);
+     return () => button.offClick(back);
+-  }, [view.type, back]);
++  }, [view.type, archived, back]);
+   // Refresh server-derived dates when the app is resumed and around midnight.
+   const selectedId = view.type === "detail" ? view.challenge.id : undefined;
+   useEffect(() => {
+@@ -76,9 +113,7 @@
+               : current,
+           );
+         } else if (view.type === "list") {
+-          const list = await api.list(page);
+-          setItems(list.items);
+-          setTotal(list.total);
++          await load(false);
+         }
+       } catch {
+         /* A foreground action presents actionable errors. */
+@@ -91,7 +126,7 @@
+       clearInterval(timer);
+       document.removeEventListener("visibilitychange", onVisible);
+     };
+-  }, [selectedId, view.type, page]);
++  }, [selectedId, view.type, load]);
+   async function mutate(operation: () => Promise<Challenge>, message: string) {
+     if (mutationLock.current) return;
+     mutationLock.current = true;
+@@ -115,7 +150,18 @@
+   }
+   const create = (input: CreateChallengeInput) =>
+     mutate(() => api.create(input), "Челлендж создан. Твой первый шаг вперед!");
++  const archive = (id: string) =>
++    mutate(async () => {
++      const challenge = await api.archive(id);
++      setArchived(true);
++      setPage(1);
++      setItems([]);
++      return challenge;
++    }, "Челлендж в архиве. История и прогресс сохранены.");
+   return {
++    archived,
++    showList,
++    archive,
+     view,
+     setView,
+     items,
+diff --git a/src/styles.css b/src/styles.css
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -256,6 +256,7 @@
+   display: flex;
+   justify-content: space-between;
+   align-items: end;
++  flex-wrap: wrap;
+   gap: 16px;
+   margin-bottom: 24px;
+ }
+diff --git a/tests/archive.test.ts b/tests/archive.test.ts
+new file mode 100644
+--- /dev/null
++++ b/tests/archive.test.ts
+@@ -0,0 +1,278 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++import { randomUUID } from "node:crypto";
++import { mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { DatabaseSync } from "node:sqlite";
++import { buildApp } from "../server/app";
++import { ChallengeService } from "../server/challenges";
++import { AppError } from "../server/errors";
++import { ChallengeRepository } from "../server/repository";
++import { challengeInput, now, signedInitData, token } from "./helpers";
++
++test("archive enforces ownership, preserves history, is idempotent and blocks both mark operations", (t) => {
++  const repository = new ChallengeRepository(":memory:");
++  t.after(() => repository.close());
++  let clock = now;
++  const service = new ChallengeService(repository, () => clock);
++  const created = service.create("42", challengeInput);
++  assert.equal(created.archivedAt, null);
++  const marked = service.checkIn("42", created.id, true);
++  assert.throws(
++    () => service.archive("43", created.id),
++    (error: unknown) => error instanceof AppError && error.statusCode === 404,
++  );
++  assert.equal(service.get("42", created.id).archivedAt, null);
++  const archived = service.archive("42", created.id);
++  assert.equal(archived.archivedAt, now.toISOString());
++  assert.equal(archived.canCheckIn, false);
++  assert.equal(archived.progress, marked.progress);
++  assert.deepEqual(archived.checkIns, marked.checkIns);
++  assert.equal(service.list("42", 1, 20).total, 0);
++  assert.equal(service.list("42", 1, 20, true).total, 1);
++  clock = new Date(now.getTime() + 60_000);
++  assert.equal(
++    service.archive("42", created.id).archivedAt,
++    archived.archivedAt,
++  );
++  for (const checked of [true, false]) {
++    assert.throws(
++      () => service.checkIn("42", created.id, checked),
++      (error: unknown) =>
++        error instanceof AppError &&
++        error.statusCode === 409 &&
++        error.code === "ARCHIVED",
++    );
++  }
++  assert.deepEqual(service.get("42", created.id).checkIns, marked.checkIns);
++  assert.equal(service.get("42", created.id).progress, marked.progress);
++});
++
++test("upcoming and finished challenges can be archived with their calendar status preserved", (t) => {
++  const repository = new ChallengeRepository(":memory:");
++  t.after(() => repository.close());
++  const service = new ChallengeService(repository, () => now);
++  for (const startDate of ["2026-10-25", "2026-10-01"]) {
++    const created = service.create("42", { ...challengeInput, startDate });
++    const archived = service.archive("42", created.id);
++    assert.equal(archived.status, created.status);
++    assert.equal(archived.canCheckIn, false);
++    assert.equal(archived.progress, 0);
++  }
++});
++
++test("version 1 migration preserves existing records and marks; archived data survives reopening", (t) => {
++  const directory = mkdtempSync(join(tmpdir(), "challenge-archive-"));
++  t.after(() => rmSync(directory, { recursive: true, force: true }));
++  const path = join(directory, "test.sqlite");
++  const legacy = new DatabaseSync(path);
++  legacy.exec(`
++    CREATE TABLE challenges (
++      id TEXT PRIMARY KEY, ownerId TEXT NOT NULL, title TEXT NOT NULL,
++      startDate TEXT NOT NULL, duration INTEGER NOT NULL CHECK(duration BETWEEN 1 AND 30),
++      timeZone TEXT NOT NULL, createdAt TEXT NOT NULL
++    );
++    CREATE TABLE check_ins (
++      challengeId TEXT NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
++      date TEXT NOT NULL, PRIMARY KEY(challengeId, date)
++    );
++    PRAGMA user_version = 1;
++  `);
++  const id = randomUUID();
++  legacy
++    .prepare("INSERT INTO challenges VALUES (?, ?, ?, ?, ?, ?, ?)")
++    .run(
++      id,
++      "42",
++      challengeInput.title,
++      challengeInput.startDate,
++      challengeInput.duration,
++      challengeInput.timeZone,
++      now.toISOString(),
++    );
++  legacy
++    .prepare("INSERT INTO check_ins VALUES (?, ?)")
++    .run(id, challengeInput.startDate);
++  legacy.close();
++  const repository = new ChallengeRepository(path);
++  const service = new ChallengeService(repository, () => now);
++  const before = service.get("42", id);
++  assert.equal(before.archivedAt, null);
++  assert.equal(before.title, challengeInput.title);
++  assert.equal(before.progress, 14);
++  assert.equal(service.list("42", 1, 20).total, 1);
++  const archived = service.archive("42", id);
++  repository.close();
++  const reopened = new ChallengeRepository(path);
++  t.after(() => reopened.close());
++  const restored = new ChallengeService(reopened, () => now);
++  assert.deepEqual(restored.get("42", id), archived);
++  assert.equal(restored.list("42", 1, 20).total, 0);
++  assert.equal(restored.list("42", 1, 20, true).items[0]?.id, id);
++  const fresh = restored.create("42", challengeInput);
++  assert.equal(fresh.archivedAt, null);
++  assert.equal(restored.list("42", 1, 20).total, 1);
++});
++
++test("API archive: authenticated owner only, isolated paginated archive, preserved read-only detail", async (t) => {
++  const app = await buildApp({
++    databasePath: ":memory:",
++    botToken: token,
++    clock: () => now,
++  });
++  t.after(() => app.close());
++  const headers = { authorization: `tma ${signedInitData()}` };
++  const other = { authorization: `tma ${signedInitData(43)}` };
++  const ids: string[] = [];
++  for (let index = 0; index < 3; index += 1) {
++    const created = await app.inject({
++      method: "POST",
++      url: "/api/challenges",
++      headers,
++      payload: challengeInput,
++    });
++    assert.equal(created.statusCode, 201);
++    ids.push(created.json().id);
++  }
++  const id = ids[0]!;
++  const url = `/api/challenges/${id}/archive`;
++  assert.equal((await app.inject({ method: "PUT", url })).statusCode, 401);
++  assert.equal(
++    (await app.inject({ method: "PUT", url, headers: other })).statusCode,
++    404,
++  );
++  assert.equal(
++    (
++      await app.inject({
++        method: "PUT",
++        url: `/api/challenges/${randomUUID()}/archive`,
++        headers,
++      })
++    ).statusCode,
++    404,
++  );
++  assert.equal(
++    (
++      await app.inject({
++        method: "PUT",
++        url: "/api/challenges/invalid/archive",
++        headers,
++      })
++    ).statusCode,
++    422,
++  );
++  assert.equal(
++    (
++      await app.inject({
++        method: "PUT",
++        url,
++        headers,
++        payload: { ownerId: "43" },
++      })
++    ).statusCode,
++    422,
++  );
++  const marked = await app.inject({
++    method: "PUT",
++    url: `/api/challenges/${id}/check-ins/today`,
++    headers,
++  });
++  assert.equal(marked.statusCode, 200);
++  const archive = await app.inject({ method: "PUT", url, headers });
++  assert.equal(archive.statusCode, 200);
++  assert.equal(archive.json().archivedAt, now.toISOString());
++  assert.equal(archive.json().canCheckIn, false);
++  assert.equal(archive.json().ownerId, undefined);
++  assert.equal(archive.json().progress, marked.json().progress);
++  assert.deepEqual(archive.json().checkIns, marked.json().checkIns);
++  assert.deepEqual(
++    (await app.inject({ method: "PUT", url, headers })).json(),
++    archive.json(),
++  );
++  assert.equal(
++    (
++      await app.inject({
++        method: "PUT",
++        url: `/api/challenges/${ids[1]}/archive`,
++        headers,
++      })
++    ).statusCode,
++    200,
++  );
++  const active = await app.inject({ url: "/api/challenges", headers });
++  assert.equal(active.json().total, 1);
++  assert.equal(active.json().items[0].id, ids[2]);
++  assert.deepEqual(
++    (
++      await app.inject({ url: "/api/challenges?archived=false", headers })
++    ).json(),
++    active.json(),
++  );
++  const pages = await Promise.all(
++    [1, 2].map((page) =>
++      app.inject({
++        url: `/api/challenges?archived=true&pageSize=1&page=${page}`,
++        headers,
++      }),
++    ),
++  );
++  pages.forEach((page) => {
++    assert.equal(page.statusCode, 200);
++    assert.equal(page.json().total, 2);
++    assert.equal(page.json().items.length, 1);
++    assert.equal(page.headers["cache-control"], "no-store");
++  });
++  assert.notEqual(pages[0]!.json().items[0].id, pages[1]!.json().items[0].id);
++  assert.equal(
++    (
++      await app.inject({ url: "/api/challenges?archived=true", headers: other })
++    ).json().total,
++    0,
++  );
++  assert.equal(
++    (await app.inject({ url: `/api/challenges/${id}`, headers: other }))
++      .statusCode,
++    404,
++  );
++  assert.equal(
++    (await app.inject({ method: "PUT", url, headers: other })).statusCode,
++    404,
++  );
++  for (const method of ["PUT", "DELETE"] as const) {
++    const response = await app.inject({
++      method,
++      url: `/api/challenges/${id}/check-ins/today`,
++      headers,
++    });
++    assert.equal(response.statusCode, 409);
++    assert.equal(response.json().error.code, "ARCHIVED");
++    assert.equal(
++      (
++        await app.inject({
++          method,
++          url: `/api/challenges/${id}/check-ins/today`,
++          headers: other,
++        })
++      ).statusCode,
++      404,
++    );
++  }
++  assert.deepEqual(
++    (await app.inject({ url: `/api/challenges/${id}`, headers })).json(),
++    archive.json(),
++  );
++  for (const query of [
++    "archived=yes",
++    "archived=1",
++    "archived=",
++    "archived=true&ownerId=43",
++    "archived=true&archived=false",
++  ]) {
++    assert.equal(
++      (await app.inject({ url: `/api/challenges?${query}`, headers }))
++        .statusCode,
++      422,
++    );
++  }
++});

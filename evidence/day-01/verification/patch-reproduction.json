@@ -1,0 +1,10 @@
+[
+  {
+    "generation": "generation-1",
+    "final_patch_applies_to_public_baseline": true
+  },
+  {
+    "generation": "generation-2",
+    "final_patch_applies_to_public_baseline": true
+  }
+]

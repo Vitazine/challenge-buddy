@@ -131,6 +131,8 @@ export function useChallengeApp() {
   function navigate(next: View) {
     if (mutationLock.current) return;
     requestVersion.current++;
+    // The invalidated list request no longer owns a loading state on this screen.
+    setLoading(false);
     setView(next);
     setError("");
     setNotice("");

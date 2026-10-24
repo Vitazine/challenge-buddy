@@ -1,0 +1,17 @@
+{
+  "category": "exploratory; added after generation 1",
+  "startup": "accepted",
+  "schemaUnchanged": false,
+  "before": [
+    "future_sentinel"
+  ],
+  "after": [
+    "challenges",
+    "check_ins",
+    "future_sentinel"
+  ],
+  "version": 99,
+  "sentinel": "synthetic",
+  "message": null,
+  "desiredOutcome": "refuse unsupported future version before modifying its schema"
+}
