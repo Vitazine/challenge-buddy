@@ -163,7 +163,13 @@ test("archive pagination filters items and total identically; statuses stay cale
     ["2026-10-25", "upcoming"],
     ["2026-10-01", "finished"],
   ]) {
-    const item = service.create("42", { ...challengeInput, startDate });
+    // Historical records were created while their start date was valid.
+    const creationClock =
+      startDate < challengeInput.startDate
+        ? new Date(`${startDate}T10:00:00Z`)
+        : now;
+    const creator = new ChallengeService(repo, () => creationClock);
+    const item = creator.create("42", { ...challengeInput, startDate });
     const result = service.archive("42", item.id);
     assert.equal(result.status, status);
     assert.equal(result.canCheckIn, false);

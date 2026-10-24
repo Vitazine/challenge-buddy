@@ -14,9 +14,12 @@
     "dev:web": "vite",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "tsx --test tests/*.test.ts",
+    "test:unit": "tsx --test tests/*.test.ts scripts/testing/*.test.mjs",
+    "test": "pnpm test:prepare && pnpm test:unit",
     "build": "tsc --noEmit && vite build",
-    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build",
+    "test:prepare": "node scripts/testing/prepare-run.mjs",
+    "check:code": "pnpm typecheck && pnpm lint && pnpm test:unit && pnpm build",
+    "check": "pnpm test:prepare && pnpm check:code",
     "start": "tsx --env-file-if-exists=.env server/index.ts"
   },
   "dependencies": {

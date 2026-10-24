@@ -7,3 +7,21 @@ data/
 !.env.example
 .DS_Store
 test-results/
+
+# Generated evidence: keep reports and source assets, not screenshots or archives.
+/evidence/**/*.jpg
+/evidence/**/*.jpeg
+/evidence/**/*.png
+/evidence/**/*.webp
+/evidence/**/*.gif
+/evidence/**/*.zip
+/evidence/**/screenshots/
+/evidence/**/snapshots/
+/docs/screenshots/
+
+# Day 2/3 retain only compact final reports; raw run data belongs in test-results/.
+/evidence/day-02/*
+!/evidence/day-02/README.md
+/evidence/day-03/*
+!/evidence/day-03/README.md
+!/evidence/day-03/cleanup-policy.md

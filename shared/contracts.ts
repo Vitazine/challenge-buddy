@@ -11,6 +11,28 @@ export const dateSchema = z
     );
   }, "Укажите существующую дату");
 
+export const timeZoneSchema = z
+  .string()
+  .max(100)
+  .refine((value) => {
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: value });
+      return true;
+    } catch {
+      return false;
+    }
+  }, "Неизвестный часовой пояс");
+
+export const challengeCreationQuerySchema = z
+  .object({ timeZone: timeZoneSchema })
+  .strict();
+
+export interface ChallengeCreationLimits {
+  today: string;
+  maxStartDate: string;
+  timeZone: string;
+}
+
 export const createChallengeSchema = z
   .object({
     title: z
@@ -20,17 +42,7 @@ export const createChallengeSchema = z
       .max(80, "Не более 80 символов"),
     startDate: dateSchema,
     duration: z.number().int().min(1).max(30),
-    timeZone: z
-      .string()
-      .max(100)
-      .refine((value) => {
-        try {
-          new Intl.DateTimeFormat("en", { timeZone: value });
-          return true;
-        } catch {
-          return false;
-        }
-      }, "Неизвестный часовой пояс"),
+    timeZone: timeZoneSchema,
   })
   .strict();
 

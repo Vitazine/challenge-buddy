@@ -1,4 +1,8 @@
-import type { Challenge, CreateChallengeInput } from "../shared/contracts";
+import type {
+  Challenge,
+  ChallengeCreationLimits,
+  CreateChallengeInput,
+} from "../shared/contracts";
 import { addDays, todayInZone } from "../shared/dates";
 import { AppError } from "./errors";
 import { ChallengeRepository, type ChallengeRecord } from "./repository";
@@ -42,8 +46,29 @@ export class ChallengeService {
       total: this.repository.count(ownerId, archived),
     };
   }
+  creationLimits(
+    timeZone: string,
+    now = this.clock(),
+  ): ChallengeCreationLimits {
+    const today = todayInZone(timeZone, now);
+    return { today, maxStartDate: addDays(today, 7), timeZone };
+  }
   create(ownerId: string, input: CreateChallengeInput): Challenge {
-    return this.present(this.repository.create(ownerId, input, this.clock()));
+    const now = this.clock();
+    const { today, maxStartDate } = this.creationLimits(input.timeZone, now);
+    if (input.startDate < today)
+      throw new AppError(
+        422,
+        "START_DATE_TOO_EARLY",
+        `Дата старта должна быть не раньше ${today} (сегодня).`,
+      );
+    if (input.startDate > maxStartDate)
+      throw new AppError(
+        422,
+        "START_DATE_TOO_LATE",
+        `Дата старта должна быть не позднее ${maxStartDate} включительно (сегодня + 7 дней).`,
+      );
+    return this.present(this.repository.create(ownerId, input, now));
   }
   get(ownerId: string, id: string): Challenge {
     const record = this.repository.find(id, ownerId);

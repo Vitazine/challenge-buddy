@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createChallengeSchema } from "../shared/contracts";
@@ -42,13 +42,17 @@ test("input rejects impossible dates, blank titles, fractional durations and unk
     "Читать",
   );
 });
-test("last day is inclusive, marks are idempotent, owner is enforced, data survives reopening", () => {
-  const path = join(
-    mkdtempSync(join(tmpdir(), "challenge-buddy-")),
-    "test.sqlite",
-  );
+test("last day is inclusive, marks are idempotent, owner is enforced, data survives reopening", (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "challenge-buddy-"));
+  const path = join(directory, "test.sqlite");
+  let openRepository: ChallengeRepository | undefined;
+  t.after(() => {
+    openRepository?.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
   let clock = now;
   const repository = new ChallengeRepository(path);
+  openRepository = repository;
   const service = new ChallengeService(repository, () => clock);
   const challenge = service.create("42", { ...challengeInput, duration: 1 });
   assert.equal(challenge.canCheckIn, true);
@@ -59,7 +63,9 @@ test("last day is inclusive, marks are idempotent, owner is enforced, data survi
     /не найден/,
   );
   repository.close();
+  openRepository = undefined;
   const reopened = new ChallengeRepository(path);
+  openRepository = reopened;
   const restored = new ChallengeService(reopened, () => clock);
   assert.equal(restored.get("42", challenge.id).progress, 100);
   assert.equal(restored.checkIn("42", challenge.id, false).progress, 0);
@@ -67,7 +73,6 @@ test("last day is inclusive, marks are idempotent, owner is enforced, data survi
   clock = new Date("2026-10-25T10:00:00Z");
   assert.equal(restored.get("42", challenge.id).status, "finished");
   assert.throws(() => restored.checkIn("42", challenge.id, true), /вне срока/);
-  reopened.close();
 });
 test("future challenge cannot be checked in", () => {
   const repository = new ChallengeRepository(":memory:");

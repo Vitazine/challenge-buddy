@@ -1,6 +1,7 @@
 import type {
   ApiError,
   Challenge,
+  ChallengeCreationLimits,
   ChallengeList,
   CreateChallengeInput,
   Session,
@@ -29,6 +30,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 export const api = {
   session: () => request<Session>("/session"),
+  creationLimits: (timeZone: string) =>
+    request<ChallengeCreationLimits>(
+      `/challenge-creation?${new URLSearchParams({ timeZone })}`,
+    ),
   list: (page = 1, archived = false) =>
     request<ChallengeList>(`/challenges?page=${page}&archived=${archived}`),
   archive: (id: string) =>

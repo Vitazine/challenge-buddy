@@ -3,7 +3,8 @@ import {
   createChallengeSchema,
   type CreateChallengeInput,
 } from "../../shared/contracts";
-import { todayInZone } from "../../shared/dates";
+import { formatDate } from "../../shared/dates";
+import { useCreationLimits } from "../hooks/useCreationLimits";
 
 const suggestions = [
   "Учиться вайб-кодингу",
@@ -22,10 +23,15 @@ export function CreateChallenge({
   const [timeZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
-  const [startDate, setStartDate] = useState(() => todayInZone(timeZone));
+  const { state: limitsState, retry } = useCreationLimits(timeZone);
+  const limits =
+    limitsState.status === "ready" ? limitsState.limits : undefined;
+  const [selectedStartDate, setStartDate] = useState<string>();
+  const startDate = selectedStartDate ?? limits?.today ?? "";
   const [error, setError] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending || !limits) return;
     const parsed = createChallengeSchema.safeParse({
       title,
       duration,
@@ -34,6 +40,15 @@ export function CreateChallenge({
     });
     if (!parsed.success) {
       setError("Проверь название, дату и длительность от 1 до 30 дней.");
+      return;
+    }
+    if (
+      parsed.data.startDate < limits.today ||
+      parsed.data.startDate > limits.maxStartDate
+    ) {
+      setError(
+        `Выбери дату с ${formatDate(limits.today)} по ${formatDate(limits.maxStartDate)} включительно.`,
+      );
       return;
     }
     setError("");
@@ -51,7 +66,20 @@ export function CreateChallenge({
         Выбери одно небольшое действие, которое хочется повторять каждый день.
       </p>
       <form onSubmit={submit} className="form-card">
-        <fieldset disabled={pending}>
+        {limitsState.status === "loading" && (
+          <p role="status" className="hint">
+            Загружаем допустимую дату старта…
+          </p>
+        )}
+        {limitsState.status === "error" && (
+          <div role="alert" className="error-text">
+            <p>{limitsState.message}</p>
+            <button type="button" className="secondary" onClick={retry}>
+              Попробовать снова
+            </button>
+          </div>
+        )}
+        <fieldset disabled={pending || !limits}>
           <label htmlFor="title">Название челленджа</label>
           <input
             id="title"
@@ -105,12 +133,19 @@ export function CreateChallenge({
               <input
                 id="startDate"
                 type="date"
+                min={limits?.today}
+                max={limits?.maxStartDate}
+                aria-describedby="start-date-hint"
                 required
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
               />
             </div>
           </div>
+          <p id="start-date-hint" className="hint">
+            {limits &&
+              `Дата старта — с ${formatDate(limits.today)} по ${formatDate(limits.maxStartDate)} включительно (сегодня и ближайшие 7 дней).`}
+          </p>
           <p className="hint">
             Часовой пояс: {timeZone}. Отметки привязаны к твоему календарному
             дню.

@@ -4,6 +4,7 @@ import rateLimit from "@fastify/rate-limit";
 import staticFiles from "@fastify/static";
 import { z, ZodError } from "zod";
 import {
+  challengeCreationQuerySchema,
   createChallengeSchema,
   listChallengesSchema,
 } from "../shared/contracts";
@@ -131,6 +132,10 @@ export async function buildApp(options: AppOptions) {
       api.get("/session", async () => ({
         mode: options.devAuth ? "development" : "telegram",
       }));
+      api.get("/challenge-creation", async (request) => {
+        const { timeZone } = challengeCreationQuerySchema.parse(request.query);
+        return service.creationLimits(timeZone);
+      });
       api.get("/challenges", async (request) => {
         const query = listChallengesSchema.parse(request.query);
         return service.list(
